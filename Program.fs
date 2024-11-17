@@ -4,6 +4,7 @@ open FSLogger
 open Argu
 open System.IO
 open System.Text
+open Expecto
 
 let logger = Logger.ColorConsole
 
@@ -95,9 +96,15 @@ let onCompare (compareArg: string * string) =
         |> Seq.ofArray
         |> Seq.map FileInfo.ofFullName
         |> Seq.sortWith Diff.sort
-    
+
     for i in testFile do
         logger.I $"{i}"
+
+let tests =
+  test "A simple test" {
+    let subject = "Hello World"
+    Expect.equal subject "Hello World" "The strings should equal"
+  }
 
 [<EntryPoint>]
 let main args =
@@ -172,5 +179,8 @@ let main args =
                 logger.I $"%A{i} exists"
             else
                 failwith $"%A{i}"
+
+    runTestsWithCLIArgs [] args tests
+    |> ignore
 
     exit 0
