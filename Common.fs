@@ -46,6 +46,9 @@ module Path =
     let join3 (path1: string) path2 path3 =
         Path.Join(path1, path2, path3)
 
+    let joinList (pathList: string list) =
+        List.reduce join pathList
+
 module File =
     let copy source dest overwrite =
         File.Copy(source, dest, overwrite)
@@ -146,6 +149,12 @@ let compareWith f a b =
     compare (f a) (f b)
 
 module Map =
+    /// <summary>`table1` - `table2`，以鍵為對比</summary>
+    /// <param name="table1"></param>
+    /// <param name="table2"></param>
+    /// <typeparam name="'k"></typeparam>
+    /// <typeparam name="'v"></typeparam>
+    /// <returns></returns>
     let difference (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
         let toSet x = x |> Map.keys |> Set.ofSeq
         let keys1 = table1 |> toSet
@@ -154,6 +163,12 @@ module Map =
         table1
         |> Map.filter (fun k v -> diff |> Set.contains k)
 
+    /// <summary>兩個表的交集</summary>
+    /// <param name="table1"></param>
+    /// <param name="table2"></param>
+    /// <typeparam name="'k"></typeparam>
+    /// <typeparam name="'v"></typeparam>
+    /// <returns></returns>
     let intersect (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
         let toSet x = x |> Map.keys |> Set.ofSeq
         let keys1 = table1 |> toSet
@@ -163,6 +178,13 @@ module Map =
         |> Seq.map (fun x -> x, (table1[x], table2[x]))
         |> Map.ofSeq
 
+    /// <summary>兩個表的交集</summary>
+    /// <param name="f"></param>
+    /// <param name="table1"></param>
+    /// <param name="table2"></param>
+    /// <typeparam name="'k"></typeparam>
+    /// <typeparam name="'v"></typeparam>
+    /// <returns></returns>
     let intersectWith (f: 'k -> 'v -> 'v -> 'v option) (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
         let toSet x = x |> Map.keys |> Set.ofSeq
         let keys1 = table1 |> toSet
@@ -173,3 +195,40 @@ module Map =
             match v with
             | Some value -> s |> Map.add t value
             | None -> s) Map.empty
+
+    // let history (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+    //     let creation = difference table1 table2
+    //     let deletion = difference table2 table1
+    //     let modification =
+    //         Map.intersectWith (fun k v2 v1 -> v2) table1 table2
+
+    let keysSet (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+        let toSet x = x |> Map.keys |> Set.ofSeq
+        let keys1 = table1 |> toSet
+        let keys2 = table2 |> toSet
+        keys1, keys2
+
+    let union (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+        let keys1, keys2 = keysSet table1 table2
+        Set.union keys1 keys2
+        |> Set.toSeq
+        |> Seq.map (fun x ->
+            let tryFind t = t |> Map.tryFind x
+            x, (tryFind table1, tryFind table2))
+        |> Map.ofSeq
+
+    let unionWith (f: 'k -> 'v -> 'v -> 'v option) (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+        let u = union table1 table2
+        let keys = u |> Map.keys
+        Seq.fold (fun s t ->
+            let v = u[t]
+            let r =
+                match v with
+                | Some v1, Some v2 -> f t v1 v2
+                | Some v1, _ -> Some v1
+                | _, Some v2 -> Some v2
+                | _, _ -> None
+            match r with
+            | Some result -> s |> Map.add t result
+            | None -> s
+            ) Map.empty keys

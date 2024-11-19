@@ -23,6 +23,9 @@ type CliArguments =
             | Add (path, saveFile) -> "添加"
 
 module Diff =
+    /// <summary>生成指定路徑的文件狀態</summary>
+    /// <param name="path">路徑</param>
+    /// <returns></returns>
     let toFile path =
         let lst =
             Directory.getAllFileSystemEntries path
@@ -49,6 +52,9 @@ module Diff =
         // let p = Path.getRelativePath path f.FullName
         $"%s{t}|%d{lwt}"
 
+    /// <summary></summary>
+    /// <param name="m"></param>
+    /// <returns></returns>
     let toSeq m=
         m
         |> Map.toSeq
@@ -106,6 +112,16 @@ let tests =
     Expect.equal subject "Hello World" "The strings should equal"
   }
 
+type VirtualFileInfo =
+    { RelativePath: string
+      Type: string
+      LastWriteTime: int64 }
+
+    static member Default =
+        { RelativePath = ""
+          Type = ""
+          LastWriteTime = 0L }
+
 [<EntryPoint>]
 let main args =
     let file = FileInfo.ofFullName @"e:\local\fsharp-example\README.md"
@@ -127,8 +143,8 @@ let main args =
 
     let currentDir = Directory.current
     let baseDir = AppContext.baseDir
-    logger.I $"{currentDir}"
-    logger.I $"{baseDir}"
+    logger.I $"currentDir: {currentDir}"
+    logger.I $"baseDir: {baseDir}"
 
     let walk = result.TryGetResult Walk
     if walk.IsSome then
@@ -182,5 +198,68 @@ let main args =
 
     runTestsWithCLIArgs [] args tests
     |> ignore
+
+    let addTests =
+        test "add test" {
+            // let subject = "Hello World"
+            // Expect.equal subject "Hello World" "The strings should equal"
+            // let file =
+            //     Path.join3 currentDir "compare/add" "add.txt"
+            //     // |> FileInfo.ofFullName
+            // if File.exists file then
+            //     File.Delete(file)
+            // // if file.Exists then
+            // //     File.Delete(file.FullName)
+            // File.copy
+            //     <| Path.join3 currentDir "compare" "add.txt"
+            //     <| Path.join3 currentDir "compare" "add"
+            //     <| true
+            // let result = onAdd (Path.join "compare" "add")
+            // logger.I $"%A{result}"
+
+            let pathList = Path.joinList [ "1"; "2"; "3" ]
+            Expect.equal pathList @"1\2\3" "joinList"
+
+            let addPath = Path.joinList [ currentDir; "compare"; "test"; "add" ]
+            File.copy <| Path.joinList [ currentDir; "compare"; "add.txt" ]
+                <| Path.join addPath "add.txt"
+                <| true
+            let p, m = onAdd addPath
+            logger.I $"%A{m}"
+            Expect.equal p addPath ""
+            // Expect.equal p addPath ""
+        }
+
+    runTestsWithCLIArgs [] args addTests
+    |> ignore
+
+    // logger.I $"{Appx.ba}"
+
+
+    let _ = (
+        let result =
+            Diff.toFile <| Path.joinList [ currentDir; "compare"; "test1" ]
+        logger.I $"%A{result}"
+
+        let readme =
+            Path.joinList [ currentDir; "README.md" ] |> FileInfo.ofFullName
+        logger.I $"{readme.DirectoryName}"
+        logger.I $"{readme.Directory}"
+        logger.I $"======================================"
+        let basePath = Path.joinList [ currentDir; "compare" ]
+        let file =
+            Directory.getAllFileSystemEntries
+            <| basePath
+            |> Array.toSeq
+            |> Seq.map FileInfo.ofFullName
+            |> Seq.sortWith Diff.sort
+            |> Seq.map (fun x -> {
+                VirtualFileInfo.RelativePath = Path.getRelativePath basePath x.FullName
+                VirtualFileInfo.LastWriteTime = x.LastWriteTime.ToFileTime()
+                VirtualFileInfo.Type = if FileInfo.isDir x then "d" else "f"
+            })
+        for i in file do
+            logger.I $"{i}"
+    )
 
     exit 0
