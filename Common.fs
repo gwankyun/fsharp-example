@@ -3,6 +3,7 @@ open System
 open System.IO
 open System.Text.RegularExpressions
 open System.Diagnostics
+open FSharpPlus
 
 module Directory =
     let getFileSystemEntries path searchPattern (searchOption: SearchOption) =
@@ -20,7 +21,7 @@ module Directory =
     let current =
         // Environment.CurrentDirectory
         Directory.GetCurrentDirectory()
-    
+
     let baseDir =
         AppContext.BaseDirectory
 
@@ -32,11 +33,11 @@ module AppContext =
         AppContext.BaseDirectory
 
 module String =
-    type T = string
-    let split (sep: T) (s: T) =
-        s.Split(sep)
+    type _T = string
+    // let split (sep: _T) (s: _T) =
+    //     s.Split(sep)
 
-    let startsWith (value: T) (str: T) =
+    let startsWith (value: _T) (str: _T) =
         str.StartsWith(value)
 
 module Path =
@@ -81,28 +82,28 @@ module File =
         File.WriteAllText(path, contents, encoding)
 
 module FileInfo =
-    type T = FileInfo
+    type _T = FileInfo
     let ofFullName path =
-        new T(path)
+        new _T(path)
 
-    let moveTo dest (src: T) =
+    let moveTo dest (src: _T) =
         src.MoveTo(dest)
 
-    let directoryName (file: T) =
+    let directoryName (file: _T) =
         file.DirectoryName
 
     let rename name file =
         let dir = file |> directoryName
         file |> moveTo (Path.join dir name)
 
-    let isDir (file: T) =
+    let isDir (file: FileInfo) =
         let dir = FileAttributes.Directory
         file.Attributes &&& dir = dir
 
-    let fullName (file: T) =
+    let fullName (file: _T) =
         file.FullName
 
-    let copyTo dest (file: T) =
+    let copyTo dest (file: _T) =
         file.CopyTo(dest)
 
 module DirectoryInfo =
@@ -176,19 +177,12 @@ let compareWith f a b =
     compare (f a) (f b)
 
 module Map =
-    /// <summary>`table1` - `table2`，以鍵為對比</summary>
-    /// <param name="table1"></param>
-    /// <param name="table2"></param>
-    /// <typeparam name="'k"></typeparam>
-    /// <typeparam name="'v"></typeparam>
-    /// <returns></returns>
-    let difference (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+    let keysSet (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
         let toSet x = x |> Map.keys |> Set.ofSeq
         let keys1 = table1 |> toSet
         let keys2 = table2 |> toSet
-        let diff = Set.difference keys1 keys2
-        table1
-        |> Map.filter (fun k v -> diff |> Set.contains k)
+        keys1, keys2
+
 
     /// <summary>兩個表的交集</summary>
     /// <param name="table1"></param>
@@ -196,7 +190,7 @@ module Map =
     /// <typeparam name="'k"></typeparam>
     /// <typeparam name="'v"></typeparam>
     /// <returns></returns>
-    let intersect (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+    let intersectK (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
         let toSet x = x |> Map.keys |> Set.ofSeq
         let keys1 = table1 |> toSet
         let keys2 = table2 |> toSet
@@ -212,7 +206,7 @@ module Map =
     /// <typeparam name="'k"></typeparam>
     /// <typeparam name="'v"></typeparam>
     /// <returns></returns>
-    let intersectWith (f: 'k -> 'v -> 'v -> 'v option) (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+    let intersectWithK (f: 'k -> 'v -> 'v -> 'v option) (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
         let toSet x = x |> Map.keys |> Set.ofSeq
         let keys1 = table1 |> toSet
         let keys2 = table2 |> toSet
@@ -223,19 +217,7 @@ module Map =
             | Some value -> s |> Map.add t value
             | None -> s) Map.empty
 
-    // let history (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
-    //     let creation = difference table1 table2
-    //     let deletion = difference table2 table1
-    //     let modification =
-    //         Map.intersectWith (fun k v2 v1 -> v2) table1 table2
-
-    let keysSet (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
-        let toSet x = x |> Map.keys |> Set.ofSeq
-        let keys1 = table1 |> toSet
-        let keys2 = table2 |> toSet
-        keys1, keys2
-
-    let union (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+    let combine (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
         let keys1, keys2 = keysSet table1 table2
         Set.union keys1 keys2
         |> Set.toSeq
@@ -244,18 +226,32 @@ module Map =
             x, (tryFind table1, tryFind table2))
         |> Map.ofSeq
 
-    let unionWith (f: 'k -> 'v -> 'v -> 'v option) (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
-        let u = union table1 table2
-        let keys = u |> Map.keys
-        Seq.fold (fun s t ->
-            let v = u[t]
-            let r =
-                match v with
-                | Some v1, Some v2 -> f t v1 v2
-                | Some v1, _ -> Some v1
-                | _, Some v2 -> Some v2
-                | _, _ -> None
-            match r with
-            | Some result -> s |> Map.add t result
-            | None -> s
-            ) Map.empty keys
+    /// <summary>`table1` - `table2`，以鍵為對比</summary>
+    /// <param name="table1"></param>
+    /// <param name="table2"></param>
+    /// <typeparam name="'k"></typeparam>
+    /// <typeparam name="'v"></typeparam>
+    /// <returns></returns>
+    let difference (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+        combine table1 table2
+        |> Map.chooseValues (fun v ->
+            match v with
+            | Some v1, None -> Some v1
+            | _ -> None)
+
+    module Common =
+        let unionWithK (f: 'k -> 'v -> 'v -> 'v option) (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+            let u = combine table1 table2
+            let keys = u |> Map.keys
+            Seq.fold (fun s t ->
+                let v = u[t]
+                let r =
+                    match v with
+                    | Some v1, Some v2 -> f t v1 v2
+                    | Some v1, _ -> Some v1
+                    | _, Some v2 -> Some v2
+                    | _, _ -> None
+                match r with
+                | Some result -> s |> Map.add t result
+                | None -> s
+                ) Map.empty keys

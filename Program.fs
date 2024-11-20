@@ -5,6 +5,7 @@ open Argu
 open System.IO
 open System.Text
 open Expecto
+open FSharpPlus
 
 let logger = Logger.ColorConsole
 
@@ -39,15 +40,15 @@ module Diff =
             |> Map.ofSeq
         m
 
-    let sort (k1: FileInfo.T) (k2: FileInfo.T) =
+    let sort (k1: FileInfo._T) (k2: FileInfo._T) =
         let level f =
             f
             |> FileInfo.fullName
-            |> String.split @"\"
-            |> Array.length
+            |> String.split [@"\"]
+            |> Seq.length
         compareWith level k1 k2
 
-    let fileInfoToStr (f: FileInfo.T) =
+    let fileInfoToStr (f: FileInfo._T) =
         let t =
             if f |> FileInfo.isDir then "d" else "f"
         let lwt = f.LastWriteTime.ToFileTime()
@@ -66,47 +67,47 @@ module Diff =
             let f = fileInfoToStr v
             $"%s{f}|%s{k}")
 
-let onCompare (compareArg: string * string) =
-    let dir1, dir2 = compareArg
-    let cp path = Path.join3 Directory.current "compare" path
-    let file1 = Diff.toFile (cp dir1)
-    let file2 = Diff.toFile (cp dir2)
-    logger.I $"{file1}"
-    logger.I $"{file2}"
+// let onCompare (compareArg: string * string) =
+//     let dir1, dir2 = compareArg
+//     let cp path = Path.join3 Directory.current "compare" path
+//     let file1 = Diff.toFile (cp dir1)
+//     let file2 = Diff.toFile (cp dir2)
+//     logger.I $"{file1}"
+//     logger.I $"{file2}"
 
-    let creation =
-        Map.difference file2 file1
-        |> Diff.toSeq
+//     let creation =
+//         Map.difference file2 file1
+//         |> Diff.toSeq
 
-    let deletion =
-        Map.difference file1 file2
-        |> Diff.toSeq
-        |> Seq.rev
+//     let deletion =
+//         Map.difference file1 file2
+//         |> Diff.toSeq
+//         |> Seq.rev
 
-    let modification =
-        Map.intersectWith (fun k v2 v1 ->
-            let isDir = FileInfo.isDir
-            match (isDir v2), (isDir v1) with
-            | true, true -> None
-            | false, false ->
-                match v2.LastWriteTime = v1.LastWriteTime with
-                | true -> None
-                | false -> Some v2
-            | _, _ -> Some v2) file2 file1
-        |> Diff.toSeq
+//     let modification =
+//         Map.intersectWith (fun k v2_ v1 ->
+//             let isDir_ = FileInfo.isDir
+//             match (isDir_ v2_), (isDir_ v1) with
+//             | true, true -> None
+//             | false, false ->
+//                 match v2_.LastWriteTime = v1.LastWriteTime with
+//                 | true -> None
+//                 | false -> Some v2_
+//             | _, _ -> Some v2_) file2 file1
+//         |> Diff.toSeq
 
-    logger.I $"creation: %A{creation}"
-    logger.I $"deletion: %A{deletion}"
-    logger.I $"modification: %A{modification}"
+//     logger.I $"creation: %A{creation}"
+//     logger.I $"deletion: %A{deletion}"
+//     logger.I $"modification: %A{modification}"
 
-    let testFile =
-        Directory.getAllFileSystemEntries @"e:\local\fsharp\fs_test\testdir\"
-        |> Seq.ofArray
-        |> Seq.map FileInfo.ofFullName
-        |> Seq.sortWith Diff.sort
+//     let testFile =
+//         Directory.getAllFileSystemEntries @"e:\local\fsharp\fs_test\testdir\"
+//         |> Seq.ofArray
+//         |> Seq.map FileInfo.ofFullName
+//         |> Seq.sortWith Diff.sort
 
-    for i in testFile do
-        logger.I $"{i}"
+//     for i in testFile do
+//         logger.I $"{i}"
 
 let tests =
   test "A simple test" {
@@ -256,31 +257,31 @@ let main args =
     // logger.I $"{Appx.ba}"
 
 
-    let _ = (
-        let result =
-            Diff.toFile <| Path.joinList [ currentDir; "compare"; "test1" ]
-        logger.I $"%A{result}"
+    // let _ = (
+    //     let result =
+    //         Diff.toFile <| Path.joinList [ currentDir; "compare"; "test1" ]
+    //     logger.I $"%A{result}"
 
-        let readme =
-            Path.joinList [ currentDir; "README.md" ] |> FileInfo.ofFullName
-        logger.I $"{readme.DirectoryName}"
-        logger.I $"{readme.Directory}"
-        logger.I $"======================================"
-        let basePath = Path.joinList [ currentDir; "compare" ]
-        let file =
-            Directory.getAllFileSystemEntries
-            <| basePath
-            |> Array.toSeq
-            |> Seq.map FileInfo.ofFullName
-            |> Seq.sortWith Diff.sort
-            |> Seq.map (fun x -> {
-                VirtualFileInfo.RelativePath = Path.getRelativePath basePath x.FullName
-                VirtualFileInfo.LastWriteTime = x.LastWriteTime.ToFileTime()
-                VirtualFileInfo.Type = if FileInfo.isDir x then "d" else "f"
-            })
-        for i in file do
-            logger.I $"{i}"
-    )
+    //     let readme =
+    //         Path.joinList [ currentDir; "README.md" ] |> FileInfo.ofFullName
+    //     logger.I $"{readme.DirectoryName}"
+    //     logger.I $"{readme.Directory}"
+    //     logger.I $"======================================"
+    //     let basePath = Path.joinList [ currentDir; "compare" ]
+    //     let file =
+    //         Directory.getAllFileSystemEntries
+    //         <| basePath
+    //         |> Array.toSeq
+    //         |> Seq.map FileInfo.ofFullName
+    //         |> Seq.sortWith Diff.sort
+    //         |> Seq.map (fun x -> {
+    //             VirtualFileInfo.RelativePath = Path.getRelativePath basePath x.FullName
+    //             VirtualFileInfo.LastWriteTime = x.LastWriteTime.ToFileTime()
+    //             VirtualFileInfo.Type = if FileInfo.isDir x then "d" else "f"
+    //         })
+    //     for i in file do
+    //         logger.I $"{i}"
+    // )
 
     let testPath = result.TryGetResult Test
     if testPath.IsSome then
@@ -327,7 +328,7 @@ let main args =
                 // logger.I $"%A{srcM}"
                 // logger.I $"%A{destM}"
 
-                let u = Map.union destM srcM
+                let u = Map.combine destM srcM
                 logger.I $"u: %A{u}"
 
                 let addFileM =
@@ -375,9 +376,33 @@ let main args =
                     (updateFileM |> Map.toList |> List.map fst |> List.sort)
                     [updateFile]
                     "updateFile"
+
+                // let m1 = [ (1, "a"); (2, "b"); (3, "c") ] |> Map.ofList
+                // let m2 = [ (2, "b"); (3, "c"); (4, "d") ] |> Map.ofList
+                // let diff = Map.difference m1 m2
+                // logger.I $"%A{diff}"
             }
 
         runTestsWithCLIArgs [] testArgs diffTests
         |> ignore
+
+    let mapTests =
+        test "map test" {
+            let m1 = [ (1, "a"); (2, "b"); (3, "c") ] |> Map.ofList
+            let m2 = [ (2, "B"); (3, "C"); (4, "D") ] |> Map.ofList
+
+            let diff = Map.difference m1 m2
+            logger.I $"%A{diff}"
+            Expect.equal diff (Map.ofList [ (1, "a") ]) "difference"
+
+            let inter = Map.intersect m1 m2
+            Expect.equal inter (Map.ofList [ (2, "b"); (3, "c") ]) "intersect"
+
+            let interWith = Map.intersectWith (fun _ v2 -> v2) m1 m2
+            Expect.equal interWith (Map.ofList [ (2, "B"); (3, "C") ]) "intersectWith"
+        }
+
+    runTestsWithCLIArgs [] testArgs mapTests
+    |> ignore
 
     exit 0
