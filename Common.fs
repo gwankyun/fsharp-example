@@ -24,6 +24,9 @@ module Directory =
     let baseDir =
         AppContext.BaseDirectory
 
+    let delete path recursive =
+        Directory.Delete(path, recursive)
+
 module AppContext =
     let baseDir =
         AppContext.BaseDirectory
@@ -49,6 +52,9 @@ module Path =
     let joinList (pathList: string list) =
         List.reduce join pathList
 
+    let combine (path1: string) (path2: string) =
+        Path.Combine(path1, path2)
+
 module File =
     let copy source dest overwrite =
         File.Copy(source, dest, overwrite)
@@ -59,11 +65,20 @@ module File =
     let exists path =
         File.Exists(path)
 
+    let delete path =
+        File.Delete(path)
+
     let readAlllines path =
         File.ReadAllLines(path)
 
     let readAlllinesEncoding path encoding =
         File.ReadAllLines(path, encoding)
+
+    let writeAllText path (contents: string) =
+        File.WriteAllText(path, contents)
+
+    let writeAllTextEncoding path (contents: string) encoding =
+        File.WriteAllText(path, contents, encoding)
 
 module FileInfo =
     type T = FileInfo
@@ -87,11 +102,23 @@ module FileInfo =
     let fullName (file: T) =
         file.FullName
 
+    let copyTo dest (file: T) =
+        file.CopyTo(dest)
+
 module DirectoryInfo =
     type T = DirectoryInfo
     let create (path: T) =
         if not path.Exists then
             path.Create()
+
+    let ofFullName path =
+        new T(path)
+
+    let getDirectories (dir: T) =
+        dir.GetDirectories()
+
+    let getFiles (dir: T) =
+        dir.GetFiles()
 
 module Match =
     type T= Match
@@ -213,7 +240,7 @@ module Map =
         Set.union keys1 keys2
         |> Set.toSeq
         |> Seq.map (fun x ->
-            let tryFind t = t |> Map.tryFind x
+            let tryFind = Map.tryFind x
             x, (tryFind table1, tryFind table2))
         |> Map.ofSeq
 

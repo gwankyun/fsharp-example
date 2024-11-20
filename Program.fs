@@ -13,6 +13,7 @@ type CliArguments =
     | Walk of dir: string
     | Compare of dir1: string * dir2: string
     | Add of path: string * saveFile: string
+    | Test of dir: string
 
     interface IArgParserTemplate with
         member this.Usage =
@@ -21,6 +22,7 @@ type CliArguments =
             | Walk dir -> "遍歷"
             | Compare (dir1, dir2) -> "對比"
             | Add (path, saveFile) -> "添加"
+            | Test dir -> "測試"
 
 module Diff =
     /// <summary>生成指定路徑的文件狀態</summary>
@@ -122,6 +124,22 @@ type VirtualFileInfo =
           Type = ""
           LastWriteTime = 0L }
 
+let rec copyDirectory (sourceDir: string) (destinationDir: string) (recursive: bool) =
+    let dir = DirectoryInfo.ofFullName sourceDir
+
+    let dirs = dir |> DirectoryInfo.getDirectories
+
+    Directory.createDirectory destinationDir |> ignore
+
+    for file in dir |> DirectoryInfo.getFiles do
+        let targetFilePath = Path.combine destinationDir file.Name
+        file |> FileInfo.copyTo targetFilePath |> ignore
+
+    if recursive then
+        for subDir in dirs do
+            let newDestDir = Path.combine destinationDir subDir.Name
+            copyDirectory subDir.FullName newDestDir true
+
 [<EntryPoint>]
 let main args =
     let file = FileInfo.ofFullName @"e:\local\fsharp-example\README.md"
@@ -142,96 +160,98 @@ let main args =
         logger.I $""
 
     let currentDir = Directory.current
-    let baseDir = AppContext.baseDir
-    logger.I $"currentDir: {currentDir}"
-    logger.I $"baseDir: {baseDir}"
+    // let baseDir = AppContext.baseDir
+    // logger.I $"currentDir: {currentDir}"
+    // logger.I $"baseDir: {baseDir}"
 
-    let walk = result.TryGetResult Walk
-    if walk.IsSome then
-        logger.I $"{walk.Value}"
-        let file =
-            let notStartsWith sub x =
-                x
-                |> FileInfo.fullName
-                |> String.startsWith (Path.join walk.Value sub)
-                |> not
-            Directory.getAllFileSystemEntries walk.Value
-            |> Seq.ofArray
-            |> Seq.map FileInfo.ofFullName
-            |> Seq.filter (notStartsWith "build")
-            |> Seq.filter (notStartsWith ".git")
-            |> Seq.filter (notStartsWith "coroutine_example-cppcheck-build-dir")
-        for i in file do
-            logger.I $"{i}"
+    // let walk = result.TryGetResult Walk
+    // if walk.IsSome then
+    //     logger.I $"{walk.Value}"
+    //     let file =
+    //         let notStartsWith sub x =
+    //             x
+    //             |> FileInfo.fullName
+    //             |> String.startsWith (Path.join walk.Value sub)
+    //             |> not
+    //         Directory.getAllFileSystemEntries walk.Value
+    //         |> Seq.ofArray
+    //         |> Seq.map FileInfo.ofFullName
+    //         |> Seq.filter (notStartsWith "build")
+    //         |> Seq.filter (notStartsWith ".git")
+    //         |> Seq.filter (notStartsWith "coroutine_example-cppcheck-build-dir")
+    //     for i in file do
+    //         logger.I $"{i}"
 
-    let compareArg = result.TryGetResult Compare
-    if compareArg.IsSome then
-        onCompare compareArg.Value
+    // let compareArg = result.TryGetResult Compare
+    // if compareArg.IsSome then
+    //     onCompare compareArg.Value
 
-    let onAdd path =
-        let file =
-            Diff.toFile path
-            |> Diff.toSeq
-        path, file
+    // let onAdd path =
+    //     let file =
+    //         Diff.toFile path
+    //         |> Diff.toSeq
+    //     path, file
 
-    let ofSeq path s =
-        s
-        |> Seq.map (fun x -> String.split @"|" x)
-        |> Seq.map (fun x -> FileInfo.ofFullName (Path.join path x[2]))
+    // let ofSeq path s =
+    //     s
+    //     |> Seq.map (fun x -> String.split @"|" x)
+    //     |> Seq.map (fun x -> FileInfo.ofFullName (Path.join path x[2]))
 
-    let addArg = result.TryGetResult Add
-    if addArg.IsSome then
-        let p, s = addArg.Value
-        let path, file = onAdd p
-        // for i in file do
-        //     logger.I $"{i}"
-        if s <> "" then
-            File.WriteAllLines(s, file, Encoding.UTF8)
-        let fileInfo = ofSeq path file
-        for i in fileInfo do
-            logger.I $"%A{i}"
-            if i.Exists || (i |> FileInfo.isDir) then
-                // failwith $"%A{i}"
-                logger.I $"%A{i} exists"
-            else
-                failwith $"%A{i}"
+    // let addArg = result.TryGetResult Add
+    // if addArg.IsSome then
+    //     let p, s = addArg.Value
+    //     let path, file = onAdd p
+    //     // for i in file do
+    //     //     logger.I $"{i}"
+    //     if s <> "" then
+    //         File.WriteAllLines(s, file, Encoding.UTF8)
+    //     let fileInfo = ofSeq path file
+    //     for i in fileInfo do
+    //         logger.I $"%A{i}"
+    //         if i.Exists || (i |> FileInfo.isDir) then
+    //             // failwith $"%A{i}"
+    //             logger.I $"%A{i} exists"
+    //         else
+    //             failwith $"%A{i}"
 
-    runTestsWithCLIArgs [] args tests
+    let testArgs : string array = Array.empty
+
+    runTestsWithCLIArgs [] testArgs tests
     |> ignore
 
-    let addTests =
-        test "add test" {
-            // let subject = "Hello World"
-            // Expect.equal subject "Hello World" "The strings should equal"
-            // let file =
-            //     Path.join3 currentDir "compare/add" "add.txt"
-            //     // |> FileInfo.ofFullName
-            // if File.exists file then
-            //     File.Delete(file)
-            // // if file.Exists then
-            // //     File.Delete(file.FullName)
-            // File.copy
-            //     <| Path.join3 currentDir "compare" "add.txt"
-            //     <| Path.join3 currentDir "compare" "add"
-            //     <| true
-            // let result = onAdd (Path.join "compare" "add")
-            // logger.I $"%A{result}"
+    // let addTests =
+    //     test "add test" {
+    //         // let subject = "Hello World"
+    //         // Expect.equal subject "Hello World" "The strings should equal"
+    //         // let file =
+    //         //     Path.join3 currentDir "compare/add" "add.txt"
+    //         //     // |> FileInfo.ofFullName
+    //         // if File.exists file then
+    //         //     File.Delete(file)
+    //         // // if file.Exists then
+    //         // //     File.Delete(file.FullName)
+    //         // File.copy
+    //         //     <| Path.join3 currentDir "compare" "add.txt"
+    //         //     <| Path.join3 currentDir "compare" "add"
+    //         //     <| true
+    //         // let result = onAdd (Path.join "compare" "add")
+    //         // logger.I $"%A{result}"
 
-            let pathList = Path.joinList [ "1"; "2"; "3" ]
-            Expect.equal pathList @"1\2\3" "joinList"
+    //         let pathList = Path.joinList [ "1"; "2"; "3" ]
+    //         Expect.equal pathList @"1\2\3" "joinList"
 
-            let addPath = Path.joinList [ currentDir; "compare"; "test"; "add" ]
-            File.copy <| Path.joinList [ currentDir; "compare"; "add.txt" ]
-                <| Path.join addPath "add.txt"
-                <| true
-            let p, m = onAdd addPath
-            logger.I $"%A{m}"
-            Expect.equal p addPath ""
-            // Expect.equal p addPath ""
-        }
+    //         let addPath = Path.joinList [ currentDir; "compare"; "test"; "add" ]
+    //         File.copy <| Path.joinList [ currentDir; "compare"; "add.txt" ]
+    //             <| Path.join addPath "add.txt"
+    //             <| true
+    //         let p, m = onAdd addPath
+    //         logger.I $"%A{m}"
+    //         Expect.equal p addPath ""
+    //         // Expect.equal p addPath ""
+    //     }
 
-    runTestsWithCLIArgs [] args addTests
-    |> ignore
+    // runTestsWithCLIArgs [] args addTests
+    // |> ignore
 
     // logger.I $"{Appx.ba}"
 
@@ -261,5 +281,103 @@ let main args =
         for i in file do
             logger.I $"{i}"
     )
+
+    let testPath = result.TryGetResult Test
+    if testPath.IsSome then
+        let diffTests =
+            test "add test" {
+                let src = Path.join testPath.Value "test"
+
+                let fileList = Directory.getAllFileSystemEntries src
+                for i in fileList do
+                    logger.I $"{i}"
+
+                let dest = Path.join testPath.Value "dest"
+
+                if Directory.exists dest then
+                    Directory.delete dest true
+
+                Directory.createDirectory dest |> ignore
+
+                copyDirectory src dest true
+                // 新增文件
+                let addFile =
+                    let file = "add.txt"
+                    let addFile = Path.joinList [ dest; file ]
+                    File.writeAllTextEncoding addFile "" Encoding.UTF8
+                    file
+
+                // 刪除文件
+                let deleteFile =
+                    let file = "1.txt"
+                    let deleteFile = Path.joinList [ dest; file ]
+                    File.delete deleteFile
+                    file
+
+                // 修改文件
+                let updateFile =
+                    let file = "2.txt"
+                    let updateFile = Path.joinList [ dest; file ]
+                    File.writeAllTextEncoding updateFile "1" Encoding.UTF8
+                    file
+
+                let srcM = Diff.toFile src
+                let destM = Diff.toFile dest
+
+                // logger.I $"%A{srcM}"
+                // logger.I $"%A{destM}"
+
+                let u = Map.union destM srcM
+                logger.I $"u: %A{u}"
+
+                let addFileM =
+                    u
+                    |> Map.filter (fun k v ->
+                        match v with
+                        | Some _, None -> true
+                        | _ -> false)
+
+                logger.I $"%A{addFileM}"
+
+                Expect.equal
+                    (addFileM |> Map.toList |> List.map fst |> List.sort)
+                    [addFile]
+                    "addFile"
+
+                let deleteFileM =
+                    u
+                    |> Map.filter (fun k v ->
+                        match v with
+                        | None, Some _ -> true
+                        | _ -> false)
+
+                // logger.I $"%A{deleteFile}"
+
+                Expect.equal
+                    (deleteFileM |> Map.toList |> List.map fst |> List.sort)
+                    [deleteFile]
+                    "deleteFile"
+
+                let updateFileM =
+                    u
+                    |> Map.filter (fun k v ->
+                        match v with
+                        | Some v1, Some v2 ->
+                            let v1d = FileInfo.isDir v1
+                            let v2d = FileInfo.isDir v2
+                            match v1d, v2d with
+                            | false, false -> v1.LastWriteTime <> v2.LastWriteTime
+                            | true, true -> false
+                            | _, _ -> true
+                        | _ -> false)
+
+                Expect.equal
+                    (updateFileM |> Map.toList |> List.map fst |> List.sort)
+                    [updateFile]
+                    "updateFile"
+            }
+
+        runTestsWithCLIArgs [] testArgs diffTests
+        |> ignore
 
     exit 0
