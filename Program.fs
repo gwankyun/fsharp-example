@@ -40,7 +40,7 @@ module Diff =
             |> Map.ofSeq
         m
 
-    let sort (k1: FileInfo._T) (k2: FileInfo._T) =
+    let sort (k1: FileInfo.T) (k2: FileInfo.T) =
         let level f =
             f
             |> FileInfo.fullName
@@ -48,7 +48,7 @@ module Diff =
             |> Seq.length
         compareWith level k1 k2
 
-    let fileInfoToStr (f: FileInfo._T) =
+    let fileInfoToStr (f: FileInfo.T) =
         let t =
             if f |> FileInfo.isDir then "d" else "f"
         let lwt = f.LastWriteTime.ToFileTime()
@@ -115,15 +115,28 @@ let tests =
     Expect.equal subject "Hello World" "The strings should equal"
   }
 
-type VirtualFileInfo =
-    { RelativePath: string
-      Type: string
-      LastWriteTime: int64 }
+module VirtualFileInfo =
+    type T =
+        { RelativePath: string
+          Type: string
+          LastWriteTime: int64 }
 
-    static member Default =
-        { RelativePath = ""
-          Type = ""
-          LastWriteTime = 0L }
+        static member Default =
+            { RelativePath = ""
+              Type = ""
+              LastWriteTime = 0L }
+
+    let ofFileInfo path (info: FileInfo.T) =
+        let rela = Path.getRelativePath path info.FullName
+        let t = if FileInfo.isDir info then "d" else "f"
+        let lwt = info.LastWriteTime.ToFileTime()
+        { RelativePath = rela
+          Type = t
+          LastWriteTime = lwt }
+
+    let toFileInfo path (info: T) =
+        FileInfo.ofFullName
+        <| Path.join path info.RelativePath
 
 let rec copyDirectory (sourceDir: string) (destinationDir: string) (recursive: bool) =
     let dir = DirectoryInfo.ofFullName sourceDir
@@ -134,7 +147,7 @@ let rec copyDirectory (sourceDir: string) (destinationDir: string) (recursive: b
 
     for file in dir |> DirectoryInfo.getFiles do
         let targetFilePath = Path.combine destinationDir file.Name
-        file |> FileInfo.copyTo targetFilePath |> ignore
+        file |> FileInfo.copyTo targetFilePath true |> ignore
 
     if recursive then
         for subDir in dirs do
@@ -287,13 +300,70 @@ let main args =
     if testPath.IsSome then
         let diffTests =
             test "add test" {
-                let src = Path.join testPath.Value "test"
+                let mutable testBase = testPath.Value
+                if testBase = "" then
+                    testBase <- Path.join currentDir "test"
+                let src = Path.join testBase "src"
+
+                // 初始初始文件
+                if Directory.exists testBase |> not then
+                    Directory.createDirectory testBase |> ignore
+
+                if Directory.exists src |> not then
+                    Directory.createDirectory src |> ignore
+
+                File.writeAllTextEncoding (Path.join src "1.txt") "" Encoding.UTF8
+                File.writeAllTextEncoding (Path.join src "2.txt") "" Encoding.UTF8
 
                 let fileList = Directory.getAllFileSystemEntries src
                 for i in fileList do
                     logger.I $"{i}"
 
-                let dest = Path.join testPath.Value "dest"
+                let vf =
+                    fileList
+                    |> Array.map FileInfo.ofFullName
+                    |> Array.map (VirtualFileInfo.ofFileInfo src)
+
+                let a = fileList |> Array.map FileInfo.ofFullName
+                let e =
+                    vf
+                    |> Array.map (VirtualFileInfo.toFileInfo src)
+                    |> Array.map FileInfo.fullName
+                logger.I $"a: %A{a}"
+                logger.I $"e: %A{e}"
+                logger.I $"eq: %A{fileList = e}"
+
+                Expect.equal
+                    (fileList)
+                    (e)
+                    "VirtualFileInfo"
+
+                let statesFile = Path.join currentDir "state1.txt"
+
+                // 測試狀態寫入本地
+                File.writeAllLinesEncoding
+                    statesFile 
+                    (vf
+                     |> Array.map (fun x ->
+                        $"%s{x.Type}|%d{x.LastWriteTime}|%s{x.RelativePath}"))
+                    Encoding.UTF8
+
+                // 讀取狀態
+                let states =
+                    File.readAlllinesEncoding statesFile Encoding.UTF8
+                    |> Array.map (fun x -> String.split ["|"] x |> Array.ofSeq)
+                    |> Array.map (fun x ->
+                        { VirtualFileInfo.RelativePath = x[2]
+                          VirtualFileInfo.Type = x[0]
+                          VirtualFileInfo.LastWriteTime = int64 x[1] })
+
+                Expect.equal
+                    vf
+                    states
+                    "read = write"
+
+                let dest = Path.join testBase "dest"
+                logger.I $"dest: %s{dest}"
 
                 if Directory.exists dest then
                     Directory.delete dest true
@@ -328,34 +398,30 @@ let main args =
                 // logger.I $"%A{srcM}"
                 // logger.I $"%A{destM}"
 
-                let u = Map.combine destM srcM
+                let u = Map.compare destM srcM
                 logger.I $"u: %A{u}"
 
                 let addFileM =
-                    u
-                    |> Map.filter (fun k v ->
-                        match v with
-                        | Some _, None -> true
-                        | _ -> false)
+                    Map.difference destM srcM
 
                 logger.I $"%A{addFileM}"
 
+                let mapToList (m: Map<'k, 'v>) =
+                    Map.toList >> (List.map fst) >> List.sort
+                    <| m
+
                 Expect.equal
-                    (addFileM |> Map.toList |> List.map fst |> List.sort)
+                    (addFileM |> mapToList)
                     [addFile]
                     "addFile"
 
                 let deleteFileM =
-                    u
-                    |> Map.filter (fun k v ->
-                        match v with
-                        | None, Some _ -> true
-                        | _ -> false)
+                    Map.difference srcM destM
 
                 // logger.I $"%A{deleteFile}"
 
                 Expect.equal
-                    (deleteFileM |> Map.toList |> List.map fst |> List.sort)
+                    (deleteFileM |> mapToList)
                     [deleteFile]
                     "deleteFile"
 
@@ -364,45 +430,27 @@ let main args =
                     |> Map.filter (fun k v ->
                         match v with
                         | Some v1, Some v2 ->
-                            let v1d = FileInfo.isDir v1
-                            let v2d = FileInfo.isDir v2
+                            let isDir = FileInfo.isDir
+                            let v1d = isDir v1
+                            let v2d = isDir v2
                             match v1d, v2d with
                             | false, false -> v1.LastWriteTime <> v2.LastWriteTime
                             | true, true -> false
                             | _, _ -> true
                         | _ -> false)
 
+                logger.I $"updateFileM: %A{updateFileM}"
+
                 Expect.equal
-                    (updateFileM |> Map.toList |> List.map fst |> List.sort)
+                    (updateFileM |> mapToList)
                     [updateFile]
                     "updateFile"
-
-                // let m1 = [ (1, "a"); (2, "b"); (3, "c") ] |> Map.ofList
-                // let m2 = [ (2, "b"); (3, "c"); (4, "d") ] |> Map.ofList
-                // let diff = Map.difference m1 m2
-                // logger.I $"%A{diff}"
             }
 
         runTestsWithCLIArgs [] testArgs diffTests
         |> ignore
 
-    let mapTests =
-        test "map test" {
-            let m1 = [ (1, "a"); (2, "b"); (3, "c") ] |> Map.ofList
-            let m2 = [ (2, "B"); (3, "C"); (4, "D") ] |> Map.ofList
-
-            let diff = Map.difference m1 m2
-            logger.I $"%A{diff}"
-            Expect.equal diff (Map.ofList [ (1, "a") ]) "difference"
-
-            let inter = Map.intersect m1 m2
-            Expect.equal inter (Map.ofList [ (2, "b"); (3, "c") ]) "intersect"
-
-            let interWith = Map.intersectWith (fun _ v2 -> v2) m1 m2
-            Expect.equal interWith (Map.ofList [ (2, "B"); (3, "C") ]) "intersectWith"
-        }
-
-    runTestsWithCLIArgs [] testArgs mapTests
+    runTestsWithCLIArgs [] testArgs CommonTest.mapTests
     |> ignore
 
     exit 0

@@ -81,15 +81,20 @@ module File =
     let writeAllTextEncoding path (contents: string) encoding =
         File.WriteAllText(path, contents, encoding)
 
-module FileInfo =
-    type _T = FileInfo
-    let ofFullName path =
-        new _T(path)
+    let writeAllLines path (contents: string seq) =
+        File.WriteAllLines(path, contents)
+    let writeAllLinesEncoding path (contents: string seq) encoding =
+        File.WriteAllLines(path, contents, encoding)
 
-    let moveTo dest (src: _T) =
+module FileInfo =
+    type T = FileInfo
+    let ofFullName path =
+        new T(path)
+
+    let moveTo dest (src: T) =
         src.MoveTo(dest)
 
-    let directoryName (file: _T) =
+    let directoryName (file: T) =
         file.DirectoryName
 
     let rename name file =
@@ -100,11 +105,11 @@ module FileInfo =
         let dir = FileAttributes.Directory
         file.Attributes &&& dir = dir
 
-    let fullName (file: _T) =
+    let fullName (file: T) =
         file.FullName
 
-    let copyTo dest (file: _T) =
-        file.CopyTo(dest)
+    let copyTo dest overwrite (file: T) =
+        file.CopyTo(dest, overwrite)
 
 module DirectoryInfo =
     type T = DirectoryInfo
@@ -122,7 +127,7 @@ module DirectoryInfo =
         dir.GetFiles()
 
 module Match =
-    type T= Match
+    type T = Match
     let groupsArray (m: T) =
         m.Groups
         |> Seq.map (fun x -> x.Value)
@@ -217,7 +222,7 @@ module Map =
             | Some value -> s |> Map.add t value
             | None -> s) Map.empty
 
-    let combine (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+    let compare (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
         let keys1, keys2 = keysSet table1 table2
         Set.union keys1 keys2
         |> Set.toSeq
@@ -233,25 +238,24 @@ module Map =
     /// <typeparam name="'v"></typeparam>
     /// <returns></returns>
     let difference (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
-        combine table1 table2
+        compare table1 table2
         |> Map.chooseValues (fun v ->
             match v with
             | Some v1, None -> Some v1
             | _ -> None)
 
-    module Common =
-        let unionWithK (f: 'k -> 'v -> 'v -> 'v option) (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
-            let u = combine table1 table2
-            let keys = u |> Map.keys
-            Seq.fold (fun s t ->
-                let v = u[t]
-                let r =
-                    match v with
-                    | Some v1, Some v2 -> f t v1 v2
-                    | Some v1, _ -> Some v1
-                    | _, Some v2 -> Some v2
-                    | _, _ -> None
-                match r with
-                | Some result -> s |> Map.add t result
-                | None -> s
-                ) Map.empty keys
+    let compareWith (f: 'k -> 'v -> 'v -> 'v option) (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+        let u = compare table1 table2
+        let keys = u |> Map.keys
+        Seq.fold (fun s t ->
+            let v = u[t]
+            let r =
+                match v with
+                | Some v1, Some v2 -> f t v1 v2
+                | Some v1, _ -> Some v1
+                | _, Some v2 -> Some v2
+                | _, _ -> None
+            match r with
+            | Some result -> s |> Map.add t result
+            | None -> s
+            ) Map.empty keys
