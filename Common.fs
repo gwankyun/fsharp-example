@@ -15,6 +15,9 @@ module Directory =
     let createDirectory path =
         Directory.CreateDirectory(path)
 
+    let createDir path =
+        createDirectory path |> ignore
+
     let exists path =
         Directory.Exists(path)
 
@@ -93,6 +96,9 @@ module FileInfo =
 
     let moveTo dest (src: T) =
         src.MoveTo(dest)
+
+    let directory (file: T) =
+        file.Directory
 
     let directoryName (file: T) =
         file.DirectoryName

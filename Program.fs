@@ -119,20 +119,20 @@ module VirtualFileInfo =
     type T =
         { RelativePath: string
           Type: string
-          LastWriteTime: int64 }
+          LastWriteTime: string }
 
         static member Default =
             { RelativePath = ""
               Type = ""
-              LastWriteTime = 0L }
+              LastWriteTime = "" }
 
     let ofFileInfo path (info: FileInfo.T) =
         let rela = Path.getRelativePath path info.FullName
         let t = if FileInfo.isDir info then "d" else "f"
-        let lwt = info.LastWriteTime.ToFileTime()
+        let lwt = info.LastWriteTime
         { RelativePath = rela
           Type = t
-          LastWriteTime = lwt }
+          LastWriteTime = lwt.ToString(@"yyyy-MM-dd HH:mm:ss:fffK") }
 
     let toFileInfo path (info: T) =
         FileInfo.ofFullName
@@ -143,7 +143,7 @@ let rec copyDirectory (sourceDir: string) (destinationDir: string) (recursive: b
 
     let dirs = dir |> DirectoryInfo.getDirectories
 
-    Directory.createDirectory destinationDir |> ignore
+    Directory.createDir destinationDir
 
     for file in dir |> DirectoryInfo.getFiles do
         let targetFilePath = Path.combine destinationDir file.Name
@@ -153,6 +153,47 @@ let rec copyDirectory (sourceDir: string) (destinationDir: string) (recursive: b
         for subDir in dirs do
             let newDestDir = Path.combine destinationDir subDir.Name
             copyDirectory subDir.FullName newDestDir true
+
+let createDirectoryFor (path: string) =
+    let dir =
+        FileInfo.ofFullName path
+        |> FileInfo.directoryName
+    // if dir <> null && (not dir.Exists) then
+    //     dir.Create() |> ignore
+    if Directory.exists dir |> not then
+        Directory.createDir dir
+
+let sort k1 k2 =
+    let level f =
+        f
+        // |> FileInfo.fullName
+        |> String.split [@"\"]
+        |> Seq.length
+    compareWith level k1 k2
+
+module State =
+    let write (state: VirtualFileInfo.T array) path =
+        File.writeAllLinesEncoding
+            path 
+            (state
+            |> Array.map (fun x ->
+                $"%s{x.Type}|%s{x.LastWriteTime}|%s{x.RelativePath}"))
+            Encoding.UTF8
+
+    let read path =
+        File.readAlllinesEncoding path Encoding.UTF8
+        |> Array.map (fun x -> String.split ["|"] x |> Array.ofSeq)
+        |> Array.map (fun x ->
+            { VirtualFileInfo.RelativePath = x[2]
+              VirtualFileInfo.Type = x[0]
+              VirtualFileInfo.LastWriteTime = x[1] })
+
+    let create src =
+        let fileList = Directory.getAllFileSystemEntries src
+        fileList
+        |> Array.sortWith sort
+        |> Array.map FileInfo.ofFullName
+        |> Array.map (VirtualFileInfo.ofFileInfo src)
 
 [<EntryPoint>]
 let main args =
@@ -303,93 +344,129 @@ let main args =
                 let mutable testBase = testPath.Value
                 if testBase = "" then
                     testBase <- Path.join currentDir "test"
+
+                if Directory.exists testBase then
+                    Directory.delete testBase true
+                Directory.createDir testBase
+
                 let src = Path.join testBase "src"
+                let history = Path.join testBase "history"
+                let dest = Path.join testBase "dest"
 
                 // 初始初始文件
                 if Directory.exists testBase |> not then
-                    Directory.createDirectory testBase |> ignore
+                    Directory.createDir testBase
 
-                if Directory.exists src |> not then
-                    Directory.createDirectory src |> ignore
+                // if Directory.exists src |> not then
+                Directory.createDir src
+                Directory.createDir dest
 
-                File.writeAllTextEncoding (Path.join src "1.txt") "" Encoding.UTF8
-                File.writeAllTextEncoding (Path.join src "2.txt") "" Encoding.UTF8
+                // if Directory.exists history then
+                //     Directory.delete history true
+                Directory.createDir history
 
-                let fileList = Directory.getAllFileSystemEntries src
-                for i in fileList do
-                    logger.I $"{i}"
+                // File.writeAllTextEncoding (Path.join src "3/1.txt") "" Encoding.UTF8
 
-                let vf =
-                    fileList
-                    |> Array.map FileInfo.ofFullName
-                    |> Array.map (VirtualFileInfo.ofFileInfo src)
+                let writeAllText path contents =
+                    createDirectoryFor path
+                    File.writeAllTextEncoding path contents Encoding.UTF8
+
+                // File.writeAllTextEncoding (Path.join src "delete.txt") "" Encoding.UTF8
+                // File.writeAllTextEncoding (Path.join src "update.txt") "" Encoding.UTF8
+                writeAllText (Path.join src @"delete.txt") ""
+                writeAllText (Path.join src @"update.txt") ""
+                writeAllText (Path.join src @"u\update.txt") ""
+
+                writeAllText (Path.join src "d/delete.txt") ""
+
+                // let file = Path.joinList [ src; "3"; "1"; "1.txt" ]
+                // writeAllText file ""
+
+                // let dir = Path.joinList [ src; "4"; "3"; "2"; "1" ]
+                // if Directory.exists dir then
+                //     Directory.delete dir true
+                // Directory.createDir dir
+
+
+                // 測試排序
+                let pathList = [ @"0"; "1"; "10"; @"0\0"; @"0\1"; @"0\0\0" ] 
+                Expect.equal
+                    pathList
+                    (List.sortWith sort pathList)
+                    "path sort"
+
+                let fileList =
+                    Directory.getAllFileSystemEntries src
+                    // |> Seq.map Fin
+                    |> Array.sortWith sort
+                // for i in fileList do
+                //     logger.I $"{__LINE__} {i}"
+
+
+                let srcState = State.create src
+                    // fileList
+                    // |> Array.map FileInfo.ofFullName
+                    // |> Array.map (VirtualFileInfo.ofFileInfo src)
 
                 let a = fileList |> Array.map FileInfo.ofFullName
                 let e =
-                    vf
+                    srcState
                     |> Array.map (VirtualFileInfo.toFileInfo src)
                     |> Array.map FileInfo.fullName
-                logger.I $"a: %A{a}"
-                logger.I $"e: %A{e}"
-                logger.I $"eq: %A{fileList = e}"
+                // logger.I $"a: %A{a}"
+                // logger.I $"e: %A{e}"
+                // logger.I $"eq: %A{fileList = e}"
 
                 Expect.equal
                     (fileList)
                     (e)
                     "VirtualFileInfo"
 
-                let statesFile = Path.join currentDir "state1.txt"
+                let srcStatePath = Path.join history "src.txt"
+                let destStatePath = Path.join history "dest.txt"
 
                 // 測試狀態寫入本地
-                File.writeAllLinesEncoding
-                    statesFile 
-                    (vf
-                     |> Array.map (fun x ->
-                        $"%s{x.Type}|%d{x.LastWriteTime}|%s{x.RelativePath}"))
-                    Encoding.UTF8
+                State.write srcState srcStatePath
+
 
                 // 讀取狀態
-                let states =
-                    File.readAlllinesEncoding statesFile Encoding.UTF8
-                    |> Array.map (fun x -> String.split ["|"] x |> Array.ofSeq)
-                    |> Array.map (fun x ->
-                        { VirtualFileInfo.RelativePath = x[2]
-                          VirtualFileInfo.Type = x[0]
-                          VirtualFileInfo.LastWriteTime = int64 x[1] })
+                let srcStateRead = State.read srcStatePath
 
                 Expect.equal
-                    vf
-                    states
+                    srcState
+                    srcStateRead
                     "read = write"
 
-                let dest = Path.join testBase "dest"
-                logger.I $"dest: %s{dest}"
+                // logger.I $"dest: %s{dest}"
 
-                if Directory.exists dest then
-                    Directory.delete dest true
+                // if Directory.exists dest then
+                //     Directory.delete dest true
 
-                Directory.createDirectory dest |> ignore
 
                 copyDirectory src dest true
                 // 新增文件
                 let addFile =
-                    let file = "add.txt"
-                    let addFile = Path.joinList [ dest; file ]
-                    File.writeAllTextEncoding addFile "" Encoding.UTF8
+                    let file = [ "add.txt"; @"a\add2.txt" ]
+                    for i in file do
+                        let addFile = Path.joinList [ dest; i ]
+                        writeAllText addFile ""
                     file
 
                 // 刪除文件
                 let deleteFile =
-                    let file = "1.txt"
-                    let deleteFile = Path.joinList [ dest; file ]
-                    File.delete deleteFile
+                    let file = [ "delete.txt"; @"d\delete.txt" ]
+                    for i in file do
+                        let deleteFile = Path.joinList [ dest; i ]
+                        File.delete deleteFile
+                    Directory.delete (Path.join dest "d") true
                     file
 
                 // 修改文件
                 let updateFile =
-                    let file = "2.txt"
-                    let updateFile = Path.joinList [ dest; file ]
-                    File.writeAllTextEncoding updateFile "1" Encoding.UTF8
+                    let file = [ "update.txt"; @"u\update.txt" ]
+                    for i in file do
+                        let updateFile = Path.joinList [ dest; i ]
+                        writeAllText updateFile "1"
                     file
 
                 let srcM = Diff.toFile src
@@ -399,20 +476,21 @@ let main args =
                 // logger.I $"%A{destM}"
 
                 let u = Map.compare destM srcM
-                logger.I $"u: %A{u}"
+                // logger.I $"u: %A{u}"
 
                 let addFileM =
                     Map.difference destM srcM
 
-                logger.I $"%A{addFileM}"
+                // logger.I $"%A{addFileM}"
 
                 let mapToList (m: Map<'k, 'v>) =
                     Map.toList >> (List.map fst) >> List.sort
                     <| m
 
                 Expect.equal
-                    (addFileM |> mapToList)
-                    [addFile]
+                    (addFileM |> mapToList |> List.sortWith sort)
+                    // addFile
+                    [ "a"; "add.txt"; @"a\add2.txt" ]
                     "addFile"
 
                 let deleteFileM =
@@ -421,30 +499,47 @@ let main args =
                 // logger.I $"%A{deleteFile}"
 
                 Expect.equal
-                    (deleteFileM |> mapToList)
-                    [deleteFile]
+                    (deleteFileM |> mapToList |> List.sortWith sort)
+                    [ "d"; "delete.txt"; @"d\delete.txt" ]
                     "deleteFile"
 
                 let updateFileM =
                     u
-                    |> Map.filter (fun k v ->
+                    |> Map.chooseValues (fun v ->
                         match v with
                         | Some v1, Some v2 ->
                             let isDir = FileInfo.isDir
                             let v1d = isDir v1
                             let v2d = isDir v2
                             match v1d, v2d with
-                            | false, false -> v1.LastWriteTime <> v2.LastWriteTime
-                            | true, true -> false
-                            | _, _ -> true
-                        | _ -> false)
+                            | false, false ->
+                                Option.ofPair (v1.LastWriteTime <> v2.LastWriteTime, v1)
+                            | true, true -> None
+                            | _, _ -> Some v1
+                        | _ -> None)
 
                 logger.I $"updateFileM: %A{updateFileM}"
 
+                // State.write d
+                State.write (State.create dest) destStatePath
+
                 Expect.equal
-                    (updateFileM |> mapToList)
-                    [updateFile]
+                    (updateFileM |> mapToList |> List.sortWith sort)
+                    [ "update.txt"; @"u\update.txt" ]
                     "updateFile"
+
+                let toSeq m =
+                    m
+                    |> Map.toSeq
+                    |> Seq.map fst
+                    |> Seq.sortWith sort
+                
+                // 根據變動複製
+                let addFileList =
+                    addFileM
+                    |> toSeq
+
+                logger.I $"add: %A{addFileList}"
             }
 
         runTestsWithCLIArgs [] testArgs diffTests
