@@ -174,7 +174,7 @@ let sort k1 k2 =
 module State =
     let write (state: VirtualFileInfo.T array) path =
         File.writeAllLinesEncoding
-            path 
+            path
             (state
             |> Array.map (fun x ->
                 $"%s{x.Type}|%s{x.LastWriteTime}|%s{x.RelativePath}"))
@@ -352,6 +352,7 @@ let main args =
                 let src = Path.join testBase "src"
                 let history = Path.join testBase "history"
                 let dest = Path.join testBase "dest"
+                let diff = Path.join testBase "diff"
 
                 // 初始初始文件
                 if Directory.exists testBase |> not then
@@ -377,7 +378,7 @@ let main args =
                 writeAllText (Path.join src @"update.txt") ""
                 writeAllText (Path.join src @"u\update.txt") ""
 
-                writeAllText (Path.join src "d/delete.txt") ""
+                writeAllText (Path.join src @"d\delete.txt") ""
 
                 // let file = Path.joinList [ src; "3"; "1"; "1.txt" ]
                 // writeAllText file ""
@@ -389,7 +390,7 @@ let main args =
 
 
                 // 測試排序
-                let pathList = [ @"0"; "1"; "10"; @"0\0"; @"0\1"; @"0\0\0" ] 
+                let pathList = [ @"0"; "1"; "10"; @"0\0"; @"0\1"; @"0\0\0" ]
                 Expect.equal
                     pathList
                     (List.sortWith sort pathList)
@@ -450,7 +451,7 @@ let main args =
                     for i in file do
                         let addFile = Path.joinList [ dest; i ]
                         writeAllText addFile ""
-                    file
+                    "a"::file
 
                 // 刪除文件
                 let deleteFile =
@@ -459,7 +460,7 @@ let main args =
                         let deleteFile = Path.joinList [ dest; i ]
                         File.delete deleteFile
                     Directory.delete (Path.join dest "d") true
-                    file
+                    "d"::file
 
                 // 修改文件
                 let updateFile =
@@ -468,6 +469,7 @@ let main args =
                         let updateFile = Path.joinList [ dest; i ]
                         writeAllText updateFile "1"
                     file
+
 
                 let srcM = Diff.toFile src
                 let destM = Diff.toFile dest
@@ -483,25 +485,15 @@ let main args =
 
                 // logger.I $"%A{addFileM}"
 
-                let mapToList (m: Map<'k, 'v>) =
-                    Map.toList >> (List.map fst) >> List.sort
-                    <| m
 
-                Expect.equal
-                    (addFileM |> mapToList |> List.sortWith sort)
-                    // addFile
-                    [ "a"; "add.txt"; @"a\add2.txt" ]
-                    "addFile"
 
                 let deleteFileM =
                     Map.difference srcM destM
 
                 // logger.I $"%A{deleteFile}"
-
-                Expect.equal
-                    (deleteFileM |> mapToList |> List.sortWith sort)
-                    [ "d"; "delete.txt"; @"d\delete.txt" ]
-                    "deleteFile"
+                let mapToList (m: Map<'k, 'v>) =
+                    Map.toList >> (List.map fst) >> List.sort
+                    <| m
 
                 let updateFileM =
                     u
@@ -518,28 +510,130 @@ let main args =
                             | _, _ -> Some v1
                         | _ -> None)
 
-                logger.I $"updateFileM: %A{updateFileM}"
-
-                // State.write d
-                State.write (State.create dest) destStatePath
+                logger.I $"[{__LINE__}] updateFileM: %A{updateFileM}"
 
                 Expect.equal
                     (updateFileM |> mapToList |> List.sortWith sort)
-                    [ "update.txt"; @"u\update.txt" ]
+                    updateFile
                     "updateFile"
+
+                Expect.equal
+                    (addFileM |> mapToList |> List.sortWith sort)
+                    addFile
+                    "addFile"
+
+                Expect.equal
+                    (deleteFileM |> mapToList |> List.sortWith sort)
+                    deleteFile
+                    "deleteFile"
+
+                // State.write d
+                State.write (State.create dest) destStatePath
 
                 let toSeq m =
                     m
                     |> Map.toSeq
                     |> Seq.map fst
                     |> Seq.sortWith sort
-                
+
+                let updateFileSeq =
+                    updateFileM
+                    |> toSeq
+
                 // 根據變動複製
-                let addFileList =
+                let addFileSeq =
                     addFileM
                     |> toSeq
 
-                logger.I $"add: %A{addFileList}"
+                let deleteFileSeq =
+                    deleteFileM
+                    |> toSeq
+                    |> Seq.rev // 刪除要反序
+
+                logger.I $"[{__LINE__}] update: %A{updateFileSeq}"
+                logger.I $"[{__LINE__}] add: %A{addFileSeq}"
+                logger.I $"[{__LINE__}] delete: %A{deleteFileSeq}"
+
+                // 將修改複製出來
+                Directory.createDir diff
+
+                let diffDate = Path.join diff "data"
+
+                let copyAction i =
+                    let destFi = FileInfo.ofFullName (Path.join dest i)
+                    if destFi |> FileInfo.isDir then
+                        Directory.createDir (Path.join diffDate i)
+                    else
+                        let diffDateFi = Path.join diffDate i |> FileInfo.ofFullName
+                        let diffDateDir = diffDateFi |> FileInfo.directoryName
+                        if Directory.exists diffDateDir |> not then
+                            Directory.createDir diffDateDir
+                        destFi |> FileInfo.copyTo (diffDateFi |> FileInfo.fullName) false |> ignore
+
+                for i in updateFileSeq do
+                    copyAction i
+
+                for i in addFileSeq do
+                    // logger.I $"[{__LINE__}] i: %A{i}"
+                    copyAction i
+
+                // 生成刪除表
+                File.writeAllLinesEncoding (Path.join diff "deletion.txt") deleteFileSeq Encoding.UTF8
+
+                // 根據修改同步src
+                let diffFileList =
+                    Directory.getAllFileSystemEntries diffDate
+                    |> Seq.ofArray
+                    |> Seq.map (Path.getRelativePath diffDate)
+                    |> Seq.sortWith sort
+
+                for i in diffFileList do
+                    // logger.I $"[{__LINE__}] i: {i}"
+                    let fp = Path.join src i
+                    let dp = Path.join diffDate i
+                    let fi = FileInfo.ofFullName fp
+                    if dp |> FileInfo.ofFullName |> FileInfo.isDir then
+                        Directory.createDir fp
+                    else
+                        let fd = fi.DirectoryName
+                        if Directory.exists fd |> not then
+                            Directory.createDir fd
+                        File.copy (Path.join diffDate i) fp true
+
+                // 同步刪除
+                for i in deleteFileSeq do
+                    // logger.I $"[{__LINE__}] i: {i}"
+                    let path = Path.join src i
+                    let info = FileInfo.ofFullName path
+                    if info |> FileInfo.isDir then
+                        Directory.delete path false
+                    else
+                        File.delete path
+
+                // src和dest對比
+                let getResult path =
+                    path
+                    |> Directory.getAllFileSystemEntries
+                    |> Array.sortWith sort
+                    |> Array.map (fun x ->
+                        VirtualFileInfo.ofFileInfo path (FileInfo.ofFullName x))
+
+                let resultSrc = getResult src
+                let resultDest = getResult dest
+
+                // logger.I $"[{__LINE__}] resultSrc: %A{resultSrc}"
+
+                let dirLwt (result: VirtualFileInfo.T array) =
+                    result
+                    |> Array.map (fun x ->
+                        match x.Type = "d" with
+                        | true -> { x with LastWriteTime = "" }
+                        | false -> x)
+
+                Expect.equal
+                    (resultSrc |> dirLwt)
+                    (resultDest |> dirLwt)
+                    "check result"
             }
 
         runTestsWithCLIArgs [] testArgs diffTests
