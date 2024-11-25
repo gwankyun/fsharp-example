@@ -545,7 +545,7 @@ let main args =
                     |> Map.chooseValues (fun v ->
                         match v with
                         | Some v1, Some v2 ->
-                            let isDir (x: VirtualFileInfo.T) = x.Type = "d" 
+                            let isDir (x: VirtualFileInfo.T) = x.Type = "d"
                             let v1d = isDir v1
                             let v2d = isDir v2
                             match v1d, v2d with
