@@ -180,13 +180,18 @@ module State =
                 $"%s{x.Type}|%s{x.LastWriteTime}|%s{x.RelativePath}"))
             Encoding.UTF8
 
-    let read path =
-        File.readAlllinesEncoding path Encoding.UTF8
-        |> Array.map (fun x -> String.split ["|"] x |> Array.ofSeq)
-        |> Array.map (fun x ->
+    let ofString str =
+        str
+        |> String.split ["|"]
+        |> Array.ofSeq
+        |> (fun x ->
             { VirtualFileInfo.RelativePath = x[2]
               VirtualFileInfo.Type = x[0]
               VirtualFileInfo.LastWriteTime = x[1] })
+
+    let read path =
+        File.readAlllinesEncoding path Encoding.UTF8
+        |> Array.map ofString
 
     let create src =
         let fileList = Directory.getAllFileSystemEntries src
@@ -470,6 +475,7 @@ let main args =
                         writeAllText updateFile "1"
                     file
 
+                let destState = State.create dest
 
                 let srcM = Diff.toFile src
                 let destM = Diff.toFile dest
@@ -480,15 +486,37 @@ let main args =
                 let u = Map.compare destM srcM
                 // logger.I $"u: %A{u}"
 
+                let stateToMap (state: VirtualFileInfo.T array) =
+                    state
+                    // |> Array.map (fun x -> State.ofString x)
+                    |> Array.map (fun x -> x.RelativePath, x)
+                    |> Map.ofArray
+
+                let srcStateM = srcState |> stateToMap
+                let destStateM = destState |> stateToMap
+
+                let stateCompare =
+                    Map.compare srcStateM destStateM
+
+                // logger.I $"[{__LINE__}] stateCompare: %A{stateCompare}"
+
                 let addFileM =
                     Map.difference destM srcM
 
                 // logger.I $"%A{addFileM}"
 
+                let addStateM =
+                    Map.difference destStateM srcStateM
 
+                logger.I $"[{__LINE__}] addStateM: %A{addFileM}"
 
                 let deleteFileM =
                     Map.difference srcM destM
+
+                let deleteStateM =
+                    Map.difference srcStateM destStateM
+
+                logger.I $"[{__LINE__}] deleteStateM: %A{deleteStateM}"
 
                 // logger.I $"%A{deleteFile}"
                 let mapToList (m: Map<'k, 'v>) =
@@ -510,7 +538,24 @@ let main args =
                             | _, _ -> Some v1
                         | _ -> None)
 
-                logger.I $"[{__LINE__}] updateFileM: %A{updateFileM}"
+                // logger.I $"[{__LINE__}] updateFileM: %A{updateFileM}"
+
+                let updateStateM =
+                    stateCompare
+                    |> Map.chooseValues (fun v ->
+                        match v with
+                        | Some v1, Some v2 ->
+                            let isDir (x: VirtualFileInfo.T) = x.Type = "d" 
+                            let v1d = isDir v1
+                            let v2d = isDir v2
+                            match v1d, v2d with
+                            | false, false ->
+                                Option.ofPair (v1.LastWriteTime <> v2.LastWriteTime, v1)
+                            | true, true -> None
+                            | _, _ -> Some v1
+                        | _ -> None)
+
+                logger.I $"[{__LINE__}] updateStateM: %A{updateStateM}"
 
                 Expect.equal
                     (updateFileM |> mapToList |> List.sortWith sort)
