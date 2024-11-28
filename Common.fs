@@ -36,11 +36,11 @@ module AppContext =
         AppContext.BaseDirectory
 
 module String =
-    type _T = string
+    // type _T = string
     // let split (sep: _T) (s: _T) =
     //     s.Split(sep)
 
-    let startsWith (value: _T) (str: _T) =
+    let startsWith (value: string) (str: string) =
         str.StartsWith(value)
 
 module Path =
@@ -90,17 +90,16 @@ module File =
         File.WriteAllLines(path, contents, encoding)
 
 module FileInfo =
-    type T = FileInfo
     let ofFullName path =
-        new T(path)
+        new FileInfo(path)
 
-    let moveTo dest (src: T) =
+    let moveTo dest (src: FileInfo) =
         src.MoveTo(dest)
 
-    let directory (file: T) =
+    let directory (file: FileInfo) =
         file.Directory
 
-    let directoryName (file: T) =
+    let directoryName (file: FileInfo) =
         file.DirectoryName
 
     let rename name file =
@@ -111,30 +110,30 @@ module FileInfo =
         let dir = FileAttributes.Directory
         file.Attributes &&& dir = dir
 
-    let fullName (file: T) =
+    let fullName (file: FileInfo) =
         file.FullName
 
-    let copyTo dest overwrite (file: T) =
+    let copyTo dest overwrite (file: FileInfo) =
         file.CopyTo(dest, overwrite)
 
 module DirectoryInfo =
-    type T = DirectoryInfo
-    let create (path: T) =
+    // type T = DirectoryInfo
+    let create (path: DirectoryInfo) =
         if not path.Exists then
             path.Create()
 
     let ofFullName path =
-        new T(path)
+        new DirectoryInfo(path)
 
-    let getDirectories (dir: T) =
+    let getDirectories (dir: DirectoryInfo) =
         dir.GetDirectories()
 
-    let getFiles (dir: T) =
+    let getFiles (dir: DirectoryInfo) =
         dir.GetFiles()
 
 module Match =
-    type T = Match
-    let groupsArray (m: T) =
+    // type T = Match
+    let groupsArray (m: Match) =
         m.Groups
         |> Seq.map (fun x -> x.Value)
         |> Seq.toArray
