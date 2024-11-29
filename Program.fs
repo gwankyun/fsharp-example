@@ -329,6 +329,140 @@ let main args =
     //         logger.I $"{i}"
     // )
 
+    let testDiff testBase =
+        if Directory.exists testBase then
+            Directory.delete testBase true
+        Directory.createDir testBase
+
+        let src = Path.join testBase "src"
+        let history = Path.join testBase "history"
+        let dest = Path.join testBase "dest"
+        let diff = Path.join testBase "diff"
+
+        // 初始初始文件
+        if Directory.exists testBase |> not then
+            Directory.createDir testBase
+
+        Directory.createDir src
+        Directory.createDir dest
+
+        Directory.createDir history
+
+        Main.initSrc src
+
+        // 測試排序
+        let _ = (
+            let pathList = [ @"0"; "1"; "10"; @"0\0"; @"0\1"; @"0\0\0" ]
+            Expect.equal
+                pathList
+                (List.sortWith VirtualFileInfo.sort pathList)
+                "path sort"
+        )
+
+        let srcState = State.create src
+
+        let _ = (
+            let fileList =
+                Directory.getAllFileSystemEntries src
+                // |> Seq.map Fin
+                |> Array.sortWith VirtualFileInfo.sort
+            // for i in fileList do
+            //     logger.I $"{__LINE__} {i}"
+
+            let e =
+                srcState
+                |> State.toArray
+                |> Array.map (VirtualFileInfo.toFileInfo src)
+                |> Array.map FileInfo.fullName
+            // logger.I $"a: %A{a}"
+            // logger.I $"e: %A{e}"
+            // logger.I $"eq: %A{fileList = e}"
+
+            Expect.equal
+                (fileList)
+                (e)
+                "VirtualFileInfo"
+        )
+
+        let srcStatePath = Path.join history "src.txt"
+        let destStatePath = Path.join history "dest.txt"
+
+        // 測試狀態寫入本地
+        State.write srcStatePath srcState
+
+        // 讀取狀態
+        let _ = (
+            let srcStateRead = State.read srcStatePath
+
+            Expect.equal
+                srcState
+                srcStateRead
+                "read = write"
+        )
+
+        copyDirectory src dest true
+
+        // 修改dest
+        let diffFile = Main.changeFile dest
+
+        // 保存dest当前狀態
+        let destState = State.create dest
+
+        let difference = State.diff destState srcState
+
+        Expect.equal
+            difference
+            diffFile
+            "diff"
+
+        // State.write d
+        State.write destStatePath destState
+
+        Directory.createDir diff
+
+        // 將變更寫入本地
+        Difference.write dest diff difference
+
+        // 讀取變更
+        let d = Difference.read diff
+
+        // 合併
+        Difference.merge src diff d
+
+        let dirEqual src dest =
+            // src和dest對比
+            let getResult path =
+                path
+                |> Directory.getAllFileSystemEntries
+                |> Array.sortWith VirtualFileInfo.sort
+                |> Array.map (fun x ->
+                    VirtualFileInfo.ofFileInfo path (FileInfo.ofFullName x))
+
+            let resultSrc = getResult src
+            let resultDest = getResult dest
+
+            // logger.I $"[{__LINE__}] resultSrc: %A{resultSrc}"
+
+            let dirLwt (result: VirtualFileInfo array) =
+                result
+                |> Array.map (fun x ->
+                    match x.Type = "d" with
+                    | true -> { x with LastWriteTime = "" }
+                    | false -> x)
+            (resultSrc |> dirLwt) = (resultDest |> dirLwt)
+
+        let dirEq = dirEqual src dest
+
+        // logger.I $"{__LINE__} %A{dest}"
+        // logger.I $"{__LINE__} %A{src}"
+        // let difference = State.diff (State.read dest) (State.read src)
+        // logger.I $"{__LINE__} %A{difference}"
+
+        Expect.equal
+            dirEq true
+            "check result"
+        src, dest
+
     let testPath = result.TryGetResult Test
     if testPath.IsSome then
         let diffTests =
@@ -337,137 +471,11 @@ let main args =
                 if testBase = "" then
                     testBase <- Path.join currentDir "test"
 
-                if Directory.exists testBase then
-                    Directory.delete testBase true
-                Directory.createDir testBase
-
-                let src = Path.join testBase "src"
-                let history = Path.join testBase "history"
-                let dest = Path.join testBase "dest"
-                let diff = Path.join testBase "diff"
-
-                // 初始初始文件
-                if Directory.exists testBase |> not then
-                    Directory.createDir testBase
-
-                Directory.createDir src
-                Directory.createDir dest
-
-                Directory.createDir history
-
-                Main.initSrc src
-
-                // 測試排序
-                let _ = (
-                    let pathList = [ @"0"; "1"; "10"; @"0\0"; @"0\1"; @"0\0\0" ]
-                    Expect.equal
-                        pathList
-                        (List.sortWith VirtualFileInfo.sort pathList)
-                        "path sort"
-                )
-
-                let srcState = State.create src
-
-                let _ = (
-                    let fileList =
-                        Directory.getAllFileSystemEntries src
-                        // |> Seq.map Fin
-                        |> Array.sortWith VirtualFileInfo.sort
-                    // for i in fileList do
-                    //     logger.I $"{__LINE__} {i}"
-
-                    let e =
-                        srcState
-                        |> State.toArray
-                        |> Array.map (VirtualFileInfo.toFileInfo src)
-                        |> Array.map FileInfo.fullName
-                    // logger.I $"a: %A{a}"
-                    // logger.I $"e: %A{e}"
-                    // logger.I $"eq: %A{fileList = e}"
-
-                    Expect.equal
-                        (fileList)
-                        (e)
-                        "VirtualFileInfo"
-                )
-
-                let srcStatePath = Path.join history "src.txt"
-                let destStatePath = Path.join history "dest.txt"
-
-                // 測試狀態寫入本地
-                State.write srcStatePath srcState
-
-                // 讀取狀態
-                let _ = (
-                    let srcStateRead = State.read srcStatePath
-
-                    Expect.equal
-                        srcState
-                        srcStateRead
-                        "read = write"
-                )
-
-                copyDirectory src dest true
-
-                // 修改dest
-                let diffFile = Main.changeFile dest
-
-                // 保存dest当前狀態
-                let destState = State.create dest
-
-                let difference = State.diff destState srcState
-
-                Expect.equal
-                    (difference)
-                    (diffFile)
-                    "diff"
-
-                // State.write d
-                State.write destStatePath destState
-
-                Directory.createDir diff
-
-                // 將變更寫入本地
-                Difference.write dest diff difference
-
-                // 讀取變更
-                let d = Difference.read diff
-
-                // 合併
-                Difference.merge src diff d
-
-                let dirEqual src dest =
-                    // src和dest對比
-                    let getResult path =
-                        path
-                        |> Directory.getAllFileSystemEntries
-                        |> Array.sortWith VirtualFileInfo.sort
-                        |> Array.map (fun x ->
-                            VirtualFileInfo.ofFileInfo path (FileInfo.ofFullName x))
-
-                    let resultSrc = getResult src
-                    let resultDest = getResult dest
-
-                    // logger.I $"[{__LINE__}] resultSrc: %A{resultSrc}"
-
-                    let dirLwt (result: VirtualFileInfo array) =
-                        result
-                        |> Array.map (fun x ->
-                            match x.Type = "d" with
-                            | true -> { x with LastWriteTime = "" }
-                            | false -> x)
-                    (resultSrc |> dirLwt) = (resultDest |> dirLwt)
-
-                let dirEq = dirEqual src dest
-
-                // logger.I $"{__LINE__} %A{dest}"
-                // logger.I $"{__LINE__} %A{src}"
+                let src, dest = testDiff testBase
+                logger.I $"{__LINE__} %A{dest}"
+                logger.I $"{__LINE__} %A{src}"
                 // let difference = State.diff (State.read dest) (State.read src)
                 // logger.I $"{__LINE__} %A{difference}"
-
-                Expect.equal
-                    dirEq true
-                    "check result"
             }
 
         runTestsWithCLIArgs [] testArgs diffTests

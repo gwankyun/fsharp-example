@@ -53,18 +53,16 @@ module Difference =
                 let c = a[0]
                 let path = a[2]
                 let t = a[1]
+                let h = path, t
                 match c with
-                | "c" -> { s with Creation = (path, t)::s.Creation }
-                | "m" -> { s with Modification = (path, t)::s.Modification }
-                | "d" -> { s with Deletion = (path, t)::s.Deletion }
+                | "c" -> { s with Creation = h::s.Creation }
+                | "m" -> { s with Modification = h::s.Modification }
+                | "d" -> { s with Deletion = h::s.Deletion }
                 | _ -> failwith "error type") 
                 { Creation = []
                   Modification = []
                   Deletion = [] } (lines |> Array.rev)
         r
-        // { r with Creation = r.Creation |> List.rev
-        //          Modification = r.Modification |> List.rev
-        //          Deletion = r.Deletion |> List.rev }
 
     let write path diffPath diff =
         let addStateM = diff.Creation
@@ -168,7 +166,7 @@ module State =
     /// <param name="path"></param>
     /// <returns></returns>
     let read path =
-        File.SetAttributes((path: string), FileAttributes.Normal)
+        // File.SetAttributes((path: string), FileAttributes.Normal)
         File.readAlllinesEncoding path Encoding.UTF8
         |> Array.map ofString
         |> State
@@ -200,12 +198,12 @@ module State =
         let srcStateM = srcState |> stateToMap
         let destStateM = destState |> stateToMap
 
-        let toSeq m =
+        let toList m =
             m
-            |> Map.toSeq
-            |> Seq.map (fun (k, v) -> k, v.Type)
-            |> Seq.sortWith (fun (k1, _) (k2, _) -> VirtualFileInfo.sort k1 k2)
-            |> Seq.toList
+            |> Map.toList
+            |> List.map (fun (k, v) -> k, v.Type)
+            |> List.sortWith (fun (k1, _) (k2, _) -> VirtualFileInfo.sort k1 k2)
+            // |> Seq.toList
 
         let stateCompare =
             Map.compare srcStateM destStateM
@@ -230,10 +228,9 @@ module State =
                     | true, true -> None
                     | _, _ -> Some v1
                 | _ -> None)
-        // addStateM, updateStateM, deleteStateM
         {
-            Difference.Creation = addStateM |> toSeq
-            Difference.Modification = updateStateM |> toSeq
-            Difference.Deletion = (deleteStateM |> toSeq |> List.rev)
+            Difference.Creation = addStateM |> toList
+            Difference.Modification = updateStateM |> toList
+            Difference.Deletion = (deleteStateM |> toList |> List.rev)
         }
 
