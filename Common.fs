@@ -12,6 +12,9 @@ module Directory =
     let getAllFileSystemEntries path =
         getFileSystemEntries path "*" SearchOption.AllDirectories
 
+    let enumerateFileSystemEntriesAll path =
+        Directory.EnumerateFileSystemEntries(path, "", SearchOption.AllDirectories)
+
     let createDirectory path =
         Directory.CreateDirectory(path)
 
@@ -59,36 +62,6 @@ module Path =
     let combine (path1: string) (path2: string) =
         Path.Combine(path1, path2)
 
-module File =
-    let copy source dest overwrite =
-        File.Copy(source, dest, overwrite)
-
-    let move source dest overwrite =
-        File.Move(source, dest, overwrite)
-
-    let exists path =
-        File.Exists(path)
-
-    let delete path =
-        File.Delete(path)
-
-    let readAlllines path =
-        File.ReadAllLines(path)
-
-    let readAlllinesEncoding path encoding =
-        File.ReadAllLines(path, encoding)
-
-    let writeAllText path (contents: string) =
-        File.WriteAllText(path, contents)
-
-    let writeAllTextEncoding path (contents: string) encoding =
-        File.WriteAllText(path, contents, encoding)
-
-    let writeAllLines path (contents: string seq) =
-        File.WriteAllLines(path, contents)
-    let writeAllLinesEncoding path (contents: string seq) encoding =
-        File.WriteAllLines(path, contents, encoding)
-
 module FileInfo =
     let ofFullName path =
         new FileInfo(path)
@@ -115,6 +88,39 @@ module FileInfo =
 
     let copyTo dest overwrite (file: FileInfo) =
         file.CopyTo(dest, overwrite)
+
+module File =
+    let copy source dest overwrite =
+        File.Copy(source, dest, overwrite)
+
+    let move source dest overwrite =
+        File.Move(source, dest, overwrite)
+
+    let exists path =
+        File.Exists(path)
+
+    let delete path =
+        File.Delete(path)
+
+    let readAlllines path =
+        File.ReadAllLines(path)
+
+    let readAlllinesEncoding path encoding =
+        printfn $"[{__LINE__}] ${path}"
+        if path |> FileInfo.ofFullName |> FileInfo.isDir then
+            failwith $"{path} is Dir"
+        File.ReadAllLines(path, encoding)
+
+    let writeAllText path (contents: string) =
+        File.WriteAllText(path, contents)
+
+    let writeAllTextEncoding path (contents: string) encoding =
+        File.WriteAllText(path, contents, encoding)
+
+    let writeAllLines path (contents: string seq) =
+        File.WriteAllLines(path, contents)
+    let writeAllLinesEncoding path (contents: string seq) encoding =
+        File.WriteAllLines(path, contents, encoding)
 
 module DirectoryInfo =
     // type T = DirectoryInfo

@@ -175,7 +175,10 @@ module State =
     /// <param name="src"></param>
     /// <returns></returns>
     let create src =
-        let fileList = Directory.getAllFileSystemEntries src
+        // let fileList = Directory.getAllFileSystemEntries src
+        let fileList =
+            Directory.enumerateFileSystemEntriesAll src
+            |> Seq.toArray
         fileList
         |> Array.sortWith VirtualFileInfo.sort
         |> Array.map FileInfo.ofFullName

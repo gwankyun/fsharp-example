@@ -32,7 +32,9 @@ module Diff =
     /// <returns></returns>
     let toFile path =
         let lst =
-            Directory.getAllFileSystemEntries path
+            // Directory.getAllFileSystemEntries path
+            Directory.enumerateFileSystemEntriesAll path
+            |> Seq.toArray
             |> Seq.ofArray
             |> Seq.map FileInfo.ofFullName
         let m =
@@ -363,7 +365,9 @@ let main args =
 
         let _ = (
             let fileList =
-                Directory.getAllFileSystemEntries src
+                // Directory.getAllFileSystemEntries src
+                Directory.enumerateFileSystemEntriesAll src
+                |> Seq.toArray
                 // |> Seq.map Fin
                 |> Array.sortWith VirtualFileInfo.sort
             // for i in fileList do
@@ -433,7 +437,9 @@ let main args =
             // src和dest對比
             let getResult path =
                 path
-                |> Directory.getAllFileSystemEntries
+                // |> Directory.getAllFileSystemEntries
+                |> Directory.enumerateFileSystemEntriesAll
+                |> Seq.toArray
                 |> Array.sortWith VirtualFileInfo.sort
                 |> Array.map (fun x ->
                     VirtualFileInfo.ofFileInfo path (FileInfo.ofFullName x))
@@ -453,15 +459,16 @@ let main args =
 
         let dirEq = dirEqual src dest
 
-        // logger.I $"{__LINE__} %A{dest}"
-        // logger.I $"{__LINE__} %A{src}"
-        // let difference = State.diff (State.read dest) (State.read src)
-        // logger.I $"{__LINE__} %A{difference}"
+        logger.I $"{__LINE__} %A{dest}"
+        logger.I $"{__LINE__} %A{src}"
+        let difference = State.diff (State.read destStatePath) (State.read srcStatePath)
+        logger.I $"{__LINE__} %A{difference}"
 
         Expect.equal
             dirEq true
             "check result"
-        src, dest
+        // src, dest
+        srcStatePath, destStatePath
 
     let testPath = result.TryGetResult Test
     if testPath.IsSome then
@@ -474,8 +481,6 @@ let main args =
                 let src, dest = testDiff testBase
                 logger.I $"{__LINE__} %A{dest}"
                 logger.I $"{__LINE__} %A{src}"
-                // let difference = State.diff (State.read dest) (State.read src)
-                // logger.I $"{__LINE__} %A{difference}"
             }
 
         runTestsWithCLIArgs [] testArgs diffTests
@@ -483,5 +488,7 @@ let main args =
 
     runTestsWithCLIArgs [] testArgs CommonTest.mapTests
     |> ignore
+
+    Library.Say.hello "test"
 
     exit 0
