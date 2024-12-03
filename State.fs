@@ -109,7 +109,7 @@ module Difference =
         // let r = read diff
         // printfn $"[{__LINE__}] %A{r}"
 
-        let copy i t ow =
+        let copy ow i t =
             let fp = Path.join path i
             if t = "d" then
                 Directory.createDir fp
@@ -126,14 +126,16 @@ module Difference =
             else
                 File.delete path
 
+        let uncurry f (a, b) = f a b
+
         diff.Creation
-        |> List.iter (fun (p, t) -> copy p t false)
+        |> List.iter (uncurry <| copy false)
 
         diff.Modification
-        |> List.iter (fun (p, t) -> copy p t true)
+        |> List.iter (uncurry <| copy true)
 
         diff.Deletion
-        |> List.iter (fun (p, t) -> delete p t)
+        |> List.iter (uncurry delete)
 
 module State =
     let toArray t=
