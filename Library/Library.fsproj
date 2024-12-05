@@ -6,7 +6,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Common.fs" />
+    <Compile Include="State.fs" />
     <Compile Include="Library.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSLogger" Version="6.0.0" />
+    <PackageReference Include="Argu" Version="6.2.4" />
+    <PackageReference Include="Expecto" Version="11.0.0-alpha2" />
+    <PackageReference Include="FSharpPlus" Version="1.6.1" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,7 @@
 ﻿module CommonTest
 open FSharpPlus
 open Expecto
+open Library
 open Common
 
 let mapTests =
