@@ -173,11 +173,7 @@ module State =
         File.readAlllinesEncoding path Encoding.UTF8
         |> Array.map ofString
         |> State
-
-    /// <summary>讀取目錄狀態</summary>
-    /// <param name="src"></param>
-    /// <returns></returns>
-    let create src =
+    let createFileInfoArray src =
         // let fileList = Directory.getAllFileSystemEntries src
         let fileList =
             Directory.enumerateFileSystemEntriesAll src
@@ -185,6 +181,20 @@ module State =
         fileList
         |> Array.sortWith VirtualFileInfo.sort
         |> Array.map FileInfo.ofFullName
+
+    /// <summary>讀取目錄狀態</summary>
+    /// <param name="src"></param>
+    /// <returns></returns>
+    let create src =
+        src
+        |> createFileInfoArray
+        |> Array.map (VirtualFileInfo.ofFileInfo src)
+        |> State
+
+    let createFilter src pred =
+        src
+        |> createFileInfoArray
+        |> Array.filter pred
         |> Array.map (VirtualFileInfo.ofFileInfo src)
         |> State
 

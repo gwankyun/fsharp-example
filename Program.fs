@@ -367,6 +367,7 @@ let main args =
         )
 
         let srcState = State.create src
+        logger.I $"[{__LINE__}] State.create %s{src}"
 
         let _ = (
             let fileList =
@@ -398,10 +399,12 @@ let main args =
 
         // 測試狀態寫入本地
         State.write srcStatePath srcState
+        logger.I $"[{__LINE__}] State.write %s{srcStatePath}"
 
         // 讀取狀態
         let _ = (
             let srcStateRead = State.read srcStatePath
+            logger.I $"[{__LINE__}] State.read %s{srcStatePath}"
 
             Expect.equal
                 srcState
@@ -416,6 +419,7 @@ let main args =
 
         // 保存dest当前狀態
         let destState = State.create dest
+        logger.I $"[{__LINE__}] State.create %s{dest}"
 
         let difference = State.diff destState srcState
 
@@ -426,14 +430,17 @@ let main args =
 
         // State.write d
         State.write destStatePath destState
+        logger.I $"[{__LINE__}] State.write %s{destStatePath}"
 
         Directory.createDir diff
 
         // 將變更寫入本地
         Difference.write dest diff difference
+        logger.I $"[{__LINE__}] Difference.write %s{dest} %s{diff}"
 
         // 讀取變更
         let d = Difference.read diff
+        logger.I $"[{__LINE__}] Difference.diff %s{diff}"
 
         // 合併
         Difference.merge src diff d
