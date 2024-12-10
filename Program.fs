@@ -444,6 +444,7 @@ let main args =
 
         // 合併
         Difference.merge src diff d
+        logger.I $"[{__LINE__}] Difference.merge %s{src} %s{diff}"
 
         let dirEqual src dest =
             // src和dest對比
