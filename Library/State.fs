@@ -250,3 +250,22 @@ module State =
             Difference.Deletion = (deleteStateM |> toList |> List.rev)
         }
 
+    let equal src dest =
+        // src和dest對比
+        let getResult path =
+            path
+            |> create
+
+        let resultSrc = getResult src
+        let resultDest = getResult dest
+
+        // logger.I $"[{__LINE__}] resultSrc: %A{resultSrc}"
+
+        let dirLwt (State result) =
+            result
+            |> Array.map (fun x ->
+                match x.Type = "d" with
+                | true -> { x with LastWriteTime = "" }
+                | false -> x)
+        (resultSrc |> dirLwt) = (resultDest |> dirLwt)
+    // let equal 

@@ -446,31 +446,7 @@ let main args =
         Difference.merge src diff d
         logger.I $"[{__LINE__}] Difference.merge %s{src} %s{diff}"
 
-        let dirEqual src dest =
-            // src和dest對比
-            let getResult path =
-                path
-                // |> Directory.getAllFileSystemEntries
-                |> Directory.enumerateFileSystemEntriesAll
-                |> Seq.toArray
-                |> Array.sortWith VirtualFileInfo.sort
-                |> Array.map (fun x ->
-                    VirtualFileInfo.ofFileInfo path (FileInfo.ofFullName x))
-
-            let resultSrc = getResult src
-            let resultDest = getResult dest
-
-            // logger.I $"[{__LINE__}] resultSrc: %A{resultSrc}"
-
-            let dirLwt (result: VirtualFileInfo array) =
-                result
-                |> Array.map (fun x ->
-                    match x.Type = "d" with
-                    | true -> { x with LastWriteTime = "" }
-                    | false -> x)
-            (resultSrc |> dirLwt) = (resultDest |> dirLwt)
-
-        let dirEq = dirEqual src dest
+        let dirEq = State.equal src dest
 
         logger.I $"{__LINE__} %A{dest}"
         logger.I $"{__LINE__} %A{src}"
