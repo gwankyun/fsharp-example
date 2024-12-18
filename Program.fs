@@ -446,7 +446,9 @@ let main args =
         Difference.merge src diff d
         logger.I $"[{__LINE__}] Difference.merge %s{src} %s{diff}"
 
-        let dirEq = State.equal src dest
+        // 對比下是否同步成功
+        let dirEq = State.equal (State.create src) destState
+        logger.I $"[{__LINE__}] State.equal %s{src}\n%s{dest}"
 
         logger.I $"{__LINE__} %A{dest}"
         logger.I $"{__LINE__} %A{src}"

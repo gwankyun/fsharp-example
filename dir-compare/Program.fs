@@ -24,6 +24,44 @@ type CliArguments =
             | Add(path, saveFile) -> "添加"
             | Test dir -> "測試"
 
+let createDirIfNotExists path =
+    if path |> Directory.exists |> not then
+        Directory.createDir path
+
+let statePost= ".state"
+
+module DirCompare =
+    let init path =
+        let path = path
+
+        if Directory.exists path then
+            let state = Path.join path statePost
+            createDirIfNotExists state
+
+    let add path file =
+        let target = Path.joinList [ path; statePost; $"%s{file}.txt" ]
+        let statePath =
+            Path.join path statePost
+            |> FileInfo.ofFullName
+            |> FileInfo.fullName
+        logger.I $"statePath: %s{statePath}"
+
+        if path |> Directory.exists then
+            let st =
+                State.createFilter path (fun x ->
+                    x.FullName
+                    |> String.startsWith statePath
+                    |> not)
+
+            State.write target st
+    
+    let compare path st1 st2 =
+        let s1 = State.read <| Path.joinList [path; ".state"; $"%s{st1}.txt"]
+        let s2 = State.read <| Path.joinList [path; ".state"; $"%s{st2}.txt"]
+        let diff = State.diff s1 s2
+        // let diffPath =
+        Difference.write path (Path.join path statePost) diff
+
 [<EntryPoint>]
 let main args =
     logger.I $"main"
@@ -43,41 +81,23 @@ let main args =
     if version.IsSome then
         logger.I $""
 
-    let createDirIfNotExists path =
-        if path |> Directory.exists |> not then
-            Directory.createDir path
 
     let init = result.TryGetResult Init
 
     if init.IsSome then
+        // 創建.state文件夾
         logger.I $"{init.Value}"
-        let path = init.Value
-
-        if Directory.exists path then
-            let state = Path.join path ".state"
-            createDirIfNotExists state
+        DirCompare.init init.Value
 
     let add = result.TryGetResult Add
 
     if add.IsSome then
         let path, file = add.Value
-        let target = Path.joinList [ path; ".state"; $"%s{file}.txt" ]
-        let statePath = Path.join path ".state" |> FileInfo.ofFullName |> FileInfo.fullName
-        logger.I $"statePath: %s{statePath}"
+        DirCompare.add path file
 
-        if path |> Directory.exists then
-            let st =
-                State.createFilter path (fun x -> x.FullName |> String.startsWith statePath |> not)
-
-            State.write target st
-
-    // let compare = result.TryGetResult Compare
-    // if compare.IsSome then
-    //     let path, st1, st2 = compare.Value
-    //     let s1 = State.read <| Path.joinList [path; ".state"; $"%s{st1}.txt"]
-    //     let s2 = State.read <| Path.joinList [path; ".state"; $"%s{st2}.txt"]
-    //     let diff = State.diff s1 s2
-    //     let diffPath =
-    //     Difference.write path
+    let compare = result.TryGetResult Compare
+    if compare.IsSome then
+        let path, st1, st2 = compare.Value
+        DirCompare.compare path st1 st2
 
     exit 0

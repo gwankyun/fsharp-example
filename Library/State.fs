@@ -173,6 +173,7 @@ module State =
         File.readAlllinesEncoding path Encoding.UTF8
         |> Array.map ofString
         |> State
+
     let createFileInfoArray src =
         // let fileList = Directory.getAllFileSystemEntries src
         let fileList =
@@ -252,12 +253,8 @@ module State =
 
     let equal src dest =
         // src和dest對比
-        let getResult path =
-            path
-            |> create
-
-        let resultSrc = getResult src
-        let resultDest = getResult dest
+        // let resultSrc = create src
+        // let resultDest = create dest
 
         // logger.I $"[{__LINE__}] resultSrc: %A{resultSrc}"
 
@@ -267,5 +264,4 @@ module State =
                 match x.Type = "d" with
                 | true -> { x with LastWriteTime = "" }
                 | false -> x)
-        (resultSrc |> dirLwt) = (resultDest |> dirLwt)
-    // let equal 
+        (src |> dirLwt) = (dest |> dirLwt)
