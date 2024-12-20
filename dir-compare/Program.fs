@@ -3,6 +3,7 @@ open FSLogger
 open Argu
 open Common
 open State
+open Main
 
 let logger = Logger.ColorConsole
 
@@ -38,6 +39,11 @@ module DirCompare =
             let state = Path.join path statePost
             createDirIfNotExists state
 
+    let pred (x: System.IO.FileInfo) =
+        x.FullName
+        |> String.startsWith statePost
+        |> not
+
     let add path file =
         let target = Path.joinList [ path; statePost; $"%s{file}.txt" ]
         let statePath =
@@ -48,10 +54,11 @@ module DirCompare =
 
         if path |> Directory.exists then
             let st =
-                State.createFilter path (fun x ->
-                    x.FullName
-                    |> String.startsWith statePath
-                    |> not)
+                State.createFilter path pred
+                // (fun x ->
+                //     x.FullName
+                //     |> String.startsWith statePath
+                //     |> not)
 
             State.write target st
     
@@ -61,6 +68,46 @@ module DirCompare =
         let diff = State.diff s1 s2
         // let diffPath =
         Difference.write path (Path.join path statePost) diff
+    
+    let test path =
+        let path = Path.join Directory.current path
+        logger.I $"path: %s{path}"
+
+        let deleteIf path =
+            if Directory.exists path then
+                Directory.delete path true
+
+        deleteIf path
+        Directory.createDir path
+
+        Main.initSrc path
+
+        let copyPath = Path.join Directory.current "copy"
+        // if Directory.exists copyPath then
+        //     Directory.delete copyPath true
+        deleteIf copyPath
+
+        Main.copyDirectory path copyPath true
+
+        // 初始
+        init path
+
+        add path "1"
+
+        Main.changeFile path |> ignore
+
+        add path "2"
+
+        let readState f = State.read (Path.joinList [ path; ".state"; f ])
+        let diff = State.diff (readState "2.txt") (readState "1.txt")
+        let diffPath = Path.join Directory.current "diff"
+        deleteIf diffPath
+        Difference.write path diffPath diff
+
+        Difference.merge copyPath diffPath diff
+
+        // let result = State.equal (State.createFilter path pred) (State.createFilter copyPath pred)
+        // logger.I "result: %A{result}"
 
 [<EntryPoint>]
 let main args =
@@ -99,5 +146,9 @@ let main args =
     if compare.IsSome then
         let path, st1, st2 = compare.Value
         DirCompare.compare path st1 st2
+
+    let test = result.TryGetResult Test
+    if test.IsSome then
+        DirCompare.test test.Value
 
     exit 0

@@ -5,6 +5,7 @@ open System.IO
 open System.Text.RegularExpressions
 open System.Diagnostics
 open FSharpPlus
+open System.Text
 
 module Directory =
     let getFileSystemEntries path searchPattern (searchOption: SearchOption) =
@@ -192,6 +193,8 @@ module Environment =
 
 let compareWith f a b =
     compare (f a) (f b)
+
+
 
 module Map =
     let keysSet (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
