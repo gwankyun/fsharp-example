@@ -36,6 +36,7 @@ module Main =
     let initSrc src =
         writeAllText (Path.join src @"delete.txt") ""
         writeAllText (Path.join src @"update.txt") ""
+        writeAllText (Path.join src @"nochange.txt") ""
         writeAllText (Path.join src @"u\update.txt") ""
 
         writeAllText (Path.join src @"d\delete.txt") ""

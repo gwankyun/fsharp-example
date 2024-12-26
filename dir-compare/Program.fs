@@ -4,6 +4,10 @@ open Argu
 open Common
 open State
 open Main
+open System
+open System.IO
+open System.Threading
+open FSharpPlus
 
 let logger = Logger.ColorConsole
 
@@ -73,19 +77,17 @@ module DirCompare =
         let path = Path.join Directory.current path
         logger.I $"path: %s{path}"
 
-        let deleteIf path =
+        let deleteIfExists path =
             if Directory.exists path then
                 Directory.delete path true
 
-        deleteIf path
+        deleteIfExists path
         Directory.createDir path
 
         Main.initSrc path
 
         let copyPath = Path.join Directory.current "copy"
-        // if Directory.exists copyPath then
-        //     Directory.delete copyPath true
-        deleteIf copyPath
+        deleteIfExists copyPath
 
         Main.copyDirectory path copyPath true
 
@@ -101,13 +103,125 @@ module DirCompare =
         let readState f = State.read (Path.joinList [ path; ".state"; f ])
         let diff = State.diff (readState "2.txt") (readState "1.txt")
         let diffPath = Path.join Directory.current "diff"
-        deleteIf diffPath
+        deleteIfExists diffPath
         Difference.write path diffPath diff
 
         Difference.merge copyPath diffPath diff
 
         // let result = State.equal (State.createFilter path pred) (State.createFilter copyPath pred)
         // logger.I "result: %A{result}"
+
+module Diff =
+    let sort (k1: string) (k2: string) =
+        let level f =
+            f
+            |> String.split [@"\"]
+            |> Seq.length
+        compareWith level k1 k2
+
+    let sortWith f =
+        let s k1 k2 =
+            sort (f k1) (f k2)
+        s
+
+    let fileInfoToStr (f: FileInfo) =
+        let t =
+            if f |> FileInfo.isDir then "d" else "f"
+        let lwt = f.LastWriteTime.ToFileTime()
+        // let p = Path.getRelativePath path f.FullName
+        $"%s{t}|%d{lwt}"
+
+    let timeFormat = @"yyyy-MM-dd HH:mm:ss:fffK"
+
+    let addState path =
+        let fileCont =
+            Directory.getAllFileSystemEntries path
+            |> Array.sortWith sort
+            |> Array.map (fun i ->
+                let info = i |> FileInfo.ofFullName
+                let rela = Path.getRelativePath path info.FullName
+                let t = 
+                    match info.FullName |> Directory.exists with
+                    | true -> "d"
+                    | false -> "f"
+                let lwt = info.LastWriteTime.ToString(timeFormat)
+                $"%s{t}|%s{lwt}|%s{rela}"
+                )
+        for i in fileCont do
+            logger.I $"%s{i}"
+        fileCont
+
+    let test path =
+        let path = Path.join Directory.current path
+        logger.I $"path: %s{path}"
+
+        let deleteIfExists path =
+            if Directory.exists path then
+                Directory.delete path true
+
+        deleteIfExists path
+        Directory.createDir path
+        Main.initSrc path
+
+        let now = DateTime.Now
+        logger.I $"now: %A{now.ToString(timeFormat)}"
+        Thread.Sleep(1 * 1000);
+
+
+        let copyPath = Path.join Directory.current "copy"
+        deleteIfExists copyPath
+
+        Main.copyDirectory path copyPath true
+
+        let later = DateTime.Now
+
+        logger.I $"%A{now < later}"
+
+        Thread.Sleep(1 * 1000);
+
+        Main.changeFile path |> ignore
+
+        let state = addState path
+
+        let newFile =
+            state
+            |> Array.filter (fun x ->
+                let s = String.split [@"|"] x |> Array.ofSeq
+                let t = s[0]
+                // let info = s[2] |> FileInfo.ofFullName
+                let dt = DateTime.ParseExact(s[1], timeFormat, null)
+                dt > now && t = "f"
+                )
+        logger.I $"state: %A{newFile}"
+
+        let stateToMap state =
+            state
+            |> Array.map (fun x ->
+                let a = String.split [@"|"] x |> Seq.toArray
+                a[2], (a[0], a[1]))
+            |> Map.ofArray
+
+        let copyState = addState copyPath
+        let pathMap = stateToMap state
+        let copyMap = stateToMap copyState
+        let compare = Map.compare pathMap copyMap
+        logger.I $"compare: %A{compare}"
+
+        let mapToArray =
+            Map.toArray
+            >> Array.sortWith (sortWith fst)
+            >> Array.map (fun (k, (t, d)) -> $"{t}|{d}|{k}")
+
+        let deleteItem =
+            Map.difference copyMap pathMap
+            |> mapToArray
+            |> Array.rev
+        logger.I $"deleteItem: \n%A{deleteItem}"
+
+        let addItem =
+            Map.difference pathMap copyMap
+            |> mapToArray
+        logger.I $"addItem: \n%A{addItem}"
 
 [<EntryPoint>]
 let main args =
@@ -146,9 +260,12 @@ let main args =
     if compare.IsSome then
         let path, st1, st2 = compare.Value
         DirCompare.compare path st1 st2
+        // Diff.add st2
 
     let test = result.TryGetResult Test
     if test.IsSome then
-        DirCompare.test test.Value
+        // DirCompare.test test.Value
+        // Diff.addState test.Value
+        Diff.test test.Value
 
     exit 0

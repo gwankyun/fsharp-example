@@ -82,14 +82,18 @@ module FileInfo =
         file |> moveTo (Path.join dir name)
 
     let isDir (file: FileInfo) =
-        let dir = FileAttributes.Directory
-        file.Attributes &&& dir = dir
+        // let dir = FileAttributes.Directory
+        // file.Attributes &&& dir = dir
+        file.Exists |> not
 
     let fullName (file: FileInfo) =
         file.FullName
 
     let copyTo dest overwrite (file: FileInfo) =
         file.CopyTo(dest, overwrite)
+
+    let lastWriteTime (file: FileInfo) =
+        file.LastWriteTime
 
 module File =
     let copy source dest overwrite =
