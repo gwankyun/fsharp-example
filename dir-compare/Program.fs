@@ -147,8 +147,8 @@ module Diff =
                 let lwt = info.LastWriteTime.ToString(timeFormat)
                 $"%s{t}|%s{lwt}|%s{rela}"
                 )
-        for i in fileCont do
-            logger.I $"%s{i}"
+        // for i in fileCont do
+        //     logger.I $"%s{i}"
         fileCont
 
     let test path =
@@ -192,7 +192,21 @@ module Diff =
                 let dt = DateTime.ParseExact(s[1], timeFormat, null)
                 dt > now && t = "f"
                 )
-        logger.I $"state: %A{newFile}"
+        logger.I $"newFile: %A{newFile}"
+
+        // 複製出來
+        deleteIfExists <| Path.join Directory.current "newFile"
+        for i in newFile do
+            let s = String.split [@"|"] i |> Array.ofSeq
+            let info =
+                FileInfo.ofFullName <| Path.joinList [
+                    Directory.current; "newFile"; s[2]
+                ]
+            if info.Directory.Exists |> not then
+                info.Directory.Create()
+            let src = FileInfo.ofFullName <| Path.join path s[2]
+            logger.I $"src: %A{src}"
+            src.CopyTo(info.FullName) |> ignore
 
         let stateToMap state =
             state
@@ -207,20 +221,21 @@ module Diff =
         let compare = Map.compare pathMap copyMap
         logger.I $"compare: %A{compare}"
 
-        let mapToArray =
+        let mapToArray pred =
             Map.toArray
+            >> Array.filter pred
             >> Array.sortWith (sortWith fst)
             >> Array.map (fun (k, (t, d)) -> $"{t}|{d}|{k}")
 
         let deleteItem =
             Map.difference copyMap pathMap
-            |> mapToArray
+            |> mapToArray (fun _ -> true)
             |> Array.rev
         logger.I $"deleteItem: \n%A{deleteItem}"
 
         let addItem =
             Map.difference pathMap copyMap
-            |> mapToArray
+            |> mapToArray (fun (_, (t, _)) -> t = "d")
         logger.I $"addItem: \n%A{addItem}"
 
 [<EntryPoint>]
