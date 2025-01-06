@@ -16,7 +16,7 @@
     <PackageReference Include="FSLogger" Version="6.0.0" />
     <PackageReference Include="Argu" Version="6.2.5" />
     <PackageReference Include="Expecto" Version="11.0.0-alpha2" />
-    <PackageReference Include="FSharpPlus" Version="1.6.1" />
+    <PackageReference Include="FSharpPlus" Version="1.7.0" />
   </ItemGroup>
 
 </Project>
