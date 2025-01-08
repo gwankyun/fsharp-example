@@ -42,8 +42,10 @@ type Item =
     | FileItem of path: string * lastWrite: DateTime
 
 module Item =
-    let ofText text =
-        let a = String.split [@"|"] text |> Seq.toArray
+    let ofString text =
+        let a =
+            String.split [@"|"] text
+            |> Seq.toArray
         let t = a[0]
         let w = a[1]
         let p = a[2]
@@ -155,7 +157,7 @@ module Diff =
         $"%s{t}|%d{lwt}"
 
 
-    let addState path =
+    let addState path pred =
         let fileCont =
             Directory.getAllFileSystemEntries path
             |> Array.sortWith sort
@@ -167,43 +169,60 @@ module Diff =
                     | true -> "d"
                     | false -> "f"
                 let lwt = info.LastWriteTime.ToString(timeFormat)
-                $"%s{t}|%s{lwt}|%s{rela}"
+                t, lwt, rela
+                // $"%s{t}|%s{lwt}|%s{rela}"
                 )
+            |> Array.filter pred
+            |> Array.map (fun (t, lwt, rela) ->
+                $"%s{t}|%s{lwt}|%s{rela}")
         // for i in fileCont do
         //     logger.I $"%s{i}"
         fileCont
 
-    let test path =
-        let path = Path.join Directory.current path
-        logger.I $"path: %s{path}"
+    let stateToMap state =
+        state
+        |> Array.map (fun x ->
+            let a = String.split [@"|"] x |> Seq.toArray
+            a[2], (a[0], a[1]))
+        |> Map.ofArray
 
-        let deleteIfExists path =
-            if Directory.exists path then
-                Directory.delete path true
+    let check state copyState =
+        let pathMap = stateToMap state
+        let copyMap = stateToMap copyState
 
-        deleteIfExists path
-        Directory.createDir path
-        Main.initSrc path
+        let tupleToItem k (t, d) =
+            if t = "d" then
+                DirItem(k)
+            else
+                FileItem(k, DateTime.ParseExact(d, timeFormat, null))
 
-        let now = DateTime.Now
-        logger.I $"now: %A{now.ToString(timeFormat)}"
-        Thread.Sleep(1 * 1000);
+        let compare =
+            Map.compare pathMap copyMap
+            |> Map.map (fun k (a, b) ->
+                let toItem = tupleToItem k
+                let mapItem = Option.map toItem
+                (mapItem a), (mapItem b))
+            |> Map.filter (fun _ (a, b) ->
+                match a, b with
+                | Some(DirItem(_)), Some(DirItem(_)) -> false
+                | Some(FileItem(_, ad)), Some(FileItem(_, bd)) -> ad <> bd
+                | None, None -> failwith "???"
+                | _ -> true
+                )
+        
+        logger.I $"compare: %A{compare}"
+        compare |> Map.isEmpty
 
+    let text = "======================================================"
+    // 開始
 
-        let copyPath = Path.join Directory.current "copy"
-        deleteIfExists copyPath
+    let deleteIfExists path =
+        if Directory.exists path then
+            Directory.delete path true
 
-        Main.copyDirectory path copyPath true
+    let testAdd path copyPath now ignoreFile =
 
-        let later = DateTime.Now
-
-        logger.I $"%A{now < later}"
-
-        Thread.Sleep(1 * 1000);
-
-        Main.changeFile path |> ignore
-
-        let state = addState path
+        let state = addState path ignoreFile
 
         let newFile =
             state
@@ -231,14 +250,7 @@ module Diff =
             logger.I $"src: %A{src}"
             src.CopyTo(info.FullName) |> ignore
 
-        let stateToMap state =
-            state
-            |> Array.map (fun x ->
-                let a = String.split [@"|"] x |> Seq.toArray
-                a[2], (a[0], a[1]))
-            |> Map.ofArray
-
-        let copyState = addState copyPath
+        let copyState = addState copyPath ignoreFile
         let pathMap = stateToMap state
         let copyMap = stateToMap copyState
         let compare = Map.compare pathMap copyMap
@@ -250,7 +262,6 @@ module Diff =
             >> Array.sortWith (sortWith fst)
             >> Array.map (fun (k, (t, d)) -> $"{t}|{d}|{k}")
 
-        let text = "======================================================"
         logger.I text
 
         logger.I text
@@ -268,12 +279,12 @@ module Diff =
         logger.I $"addItem: \n%A{addItem}"
         logger.I text
 
-        // 合併修改到copy目錄
+        Path.join Directory.current "newFile", deleteItem, addItem
 
-        logger.I $"dest: %A{copyPath}"
+    let merge path copyPath newFilePath deleteItem addItem =
         for i in deleteItem do
             logger.I $"d: %A{i}"
-            let item = Item.ofText i
+            let item = Item.ofString i
             let join = Path.join copyPath
             match item with
             | DirItem(p) -> Directory.delete <| join p <| true |> ignore
@@ -281,7 +292,7 @@ module Diff =
 
         for i in addItem do
             logger.I $"a: %A{i}"
-            let item = Item.ofText i
+            let item = Item.ofString i
             let join = Path.join copyPath
             match item with
             | DirItem(p) -> Directory.createDir <| join p
@@ -289,7 +300,7 @@ module Diff =
 
         logger.I text
 
-        let newFilePath = Path.join Directory.current "newFile"
+        // let newFilePath = Path.join Directory.current "newFile"
         let newFileList = Directory.getAllFileSystemEntries newFilePath
         for i in newFileList do
             logger.I $"ni: %A{i}"
@@ -300,31 +311,47 @@ module Diff =
 
         logger.I text
 
-        let tupleToItem k (t, d) =
-            if t = "d" then
-                DirItem(k)
-            else
-                FileItem(k, DateTime.ParseExact(d, timeFormat, null))
+    let test path =
+        let path = Path.join Directory.current path
+        logger.I $"path: %s{path}"
+
+        deleteIfExists path
+        Directory.createDir path
+        Main.initSrc path
+
+        let now = DateTime.Now
+        logger.I $"now: %A{now.ToString(timeFormat)}"
+        Thread.Sleep(1 * 1000);
+
+        let ignoreFile (_, _, path) =
+            String.startsWith @"u\git" path |> not
+
+        let copyPath = Path.join Directory.current "copy"
+        deleteIfExists copyPath
+
+        Main.copyDirectory path copyPath true
+
+        let later = DateTime.Now
+
+        logger.I $"%A{now < later}"
+
+        Thread.Sleep(1 * 1000);
+
+        Main.changeFile path |> ignore
+
+        // 將修改部分複製出來
+        let newFilePath, deleteItem, addItem = testAdd path copyPath now ignoreFile
+
+        // 合併修改到copy目錄
+        logger.I $"dest: %A{copyPath}"
+        merge path copyPath newFilePath deleteItem addItem
 
         // 對比
-        let copyState = addState copyPath
-        let pathMap = stateToMap state
-        let copyMap = stateToMap copyState
-        let compare =
-            Map.compare pathMap copyMap
-            |> Map.map (fun k (a, b) ->
-                let toItem = tupleToItem k
-                let mapItem = Option.map toItem
-                (mapItem a), (mapItem b))
-            |> Map.filter (fun _ (a, b) ->
-                match a, b with
-                | Some(DirItem(_)), Some(DirItem(_)) -> false
-                | Some(FileItem(_, ad)), Some(FileItem(_, bd)) -> ad <> bd
-                | None, None -> failwith "???"
-                | _ -> true
-                )
-        
-        logger.I $"compare: %A{compare}"
+        let copyState = addState copyPath ignoreFile
+
+        let state = addState path ignoreFile
+        let checkEq = check state copyState
+        logger.I $"checkEq: %A{checkEq}"
 
 [<EntryPoint>]
 let main args =

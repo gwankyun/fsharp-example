@@ -34,12 +34,15 @@ module Main =
         File.writeAllTextEncoding path contents Encoding.UTF8
 
     let initSrc src =
-        writeAllText (Path.join src @"delete.txt") ""
-        writeAllText (Path.join src @"update.txt") ""
-        writeAllText (Path.join src @"nochange.txt") ""
+        writeAllText (Path.join src @"fst\snd\delete.txt") ""
+        writeAllText (Path.join src @"fst\snd\update.txt") ""
+        writeAllText (Path.join src @"fst\snd\nochange.txt") ""
         writeAllText (Path.join src @"u\update.txt") ""
 
         writeAllText (Path.join src @"d\delete.txt") ""
+
+        writeAllText (Path.join src @"u\git\1.txt") ""
+        writeAllText (Path.join src @"u\git\2.txt") ""
 
     let changeFile dest =
         // 新增文件
