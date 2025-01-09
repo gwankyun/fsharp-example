@@ -8,6 +8,7 @@ open System
 open System.IO
 open System.Threading
 open FSharpPlus
+open Expecto
 
 let logger = Logger.ColorConsole
 
@@ -38,7 +39,7 @@ let statePost= ".state"
 let timeFormat = @"yyyy-MM-dd HH:mm:ss:fffK"
 
 type Item =
-    | DirItem of path: string
+    | DirItem of path: string * lastWrite: DateTime
     | FileItem of path: string * lastWrite: DateTime
 
 module Item =
@@ -49,10 +50,10 @@ module Item =
         let t = a[0]
         let w = a[1]
         let p = a[2]
+        let lw = DateTime.ParseExact(w, timeFormat, null)
         if t = "d" then
-            DirItem(path = p)
+            DirItem(path = p, lastWrite = lw)
         else
-            let lw = DateTime.ParseExact(w, timeFormat, null)
             FileItem(path = p, lastWrite = lw)
 
 // type Info =
@@ -156,9 +157,11 @@ module Diff =
         // let p = Path.getRelativePath path f.FullName
         $"%s{t}|%d{lwt}"
 
-
     let addState path pred =
-        let fileCont =
+        let fileCont path =
+            // path
+            // |> Array.collect Directory.getAllFileSystemEntries
+            // |> List.toArray
             Directory.getAllFileSystemEntries path
             |> Array.sortWith sort
             |> Array.map (fun i ->
@@ -177,7 +180,8 @@ module Diff =
                 $"%s{t}|%s{lwt}|%s{rela}")
         // for i in fileCont do
         //     logger.I $"%s{i}"
-        fileCont
+        // path |> Array.collect fileCont
+        path |> fileCont
 
     let stateToMap state =
         state
@@ -191,10 +195,11 @@ module Diff =
         let copyMap = stateToMap copyState
 
         let tupleToItem k (t, d) =
+            let dt = DateTime.ParseExact(d, timeFormat, null)
             if t = "d" then
-                DirItem(k)
+                DirItem(k, dt)
             else
-                FileItem(k, DateTime.ParseExact(d, timeFormat, null))
+                FileItem(k, dt)
 
         let compare =
             Map.compare pathMap copyMap
@@ -287,7 +292,7 @@ module Diff =
             let item = Item.ofString i
             let join = Path.join copyPath
             match item with
-            | DirItem(p) -> Directory.delete <| join p <| true |> ignore
+            | DirItem(p, d) -> Directory.delete <| join p <| true |> ignore
             | FileItem(p, d) -> File.delete <| join p |> ignore
 
         for i in addItem do
@@ -295,7 +300,7 @@ module Diff =
             let item = Item.ofString i
             let join = Path.join copyPath
             match item with
-            | DirItem(p) -> Directory.createDir <| join p
+            | DirItem(p, d) -> Directory.createDir <| join p
             | FileItem(p, d) -> File.copy <| Path.join path p <| join p <| true
 
         logger.I text
@@ -311,47 +316,61 @@ module Diff =
 
         logger.I text
 
-    let test path =
+    // let tests =
+    //     test "A simple test" {
+    //         let subject = "Hello World"
+    //         Expect.equal subject "Hello World" "The strings should equal"
+    //     }
+
+    let runTest path =
         let path = Path.join Directory.current path
         logger.I $"path: %s{path}"
 
-        deleteIfExists path
-        Directory.createDir path
-        Main.initSrc path
+        test "" {
 
-        let now = DateTime.Now
-        logger.I $"now: %A{now.ToString(timeFormat)}"
-        Thread.Sleep(1 * 1000);
+            deleteIfExists path
+            Directory.createDir path
+            Main.initSrc path
 
-        let ignoreFile (_, _, path) =
-            String.startsWith @"u\git" path |> not
+            let now = DateTime.Now
+            logger.I $"now: %A{now.ToString(timeFormat)}"
+            Thread.Sleep(1 * 1000);
 
-        let copyPath = Path.join Directory.current "copy"
-        deleteIfExists copyPath
+            let ignoreFile (_, _, path) =
+                String.startsWith @"u\git" path |> not
 
-        Main.copyDirectory path copyPath true
+            let copyPath = Path.join Directory.current "copy"
+            deleteIfExists copyPath
 
-        let later = DateTime.Now
+            Main.copyDirectory path copyPath true
 
-        logger.I $"%A{now < later}"
+            let later = DateTime.Now
 
-        Thread.Sleep(1 * 1000);
+            logger.I $"%A{now < later}"
 
-        Main.changeFile path |> ignore
+            Thread.Sleep(1 * 1000);
 
-        // 將修改部分複製出來
-        let newFilePath, deleteItem, addItem = testAdd path copyPath now ignoreFile
+            Main.changeFile path |> ignore
 
-        // 合併修改到copy目錄
-        logger.I $"dest: %A{copyPath}"
-        merge path copyPath newFilePath deleteItem addItem
+            // 將修改部分複製出來
+            let newFilePath, deleteItem, addItem = testAdd path copyPath now ignoreFile
 
-        // 對比
-        let copyState = addState copyPath ignoreFile
+            // 合併修改到copy目錄
+            logger.I $"dest: %A{copyPath}"
+            merge path copyPath newFilePath deleteItem addItem
 
-        let state = addState path ignoreFile
-        let checkEq = check state copyState
-        logger.I $"checkEq: %A{checkEq}"
+            // 對比
+            let copyState = addState copyPath ignoreFile
+
+            let state = addState path ignoreFile
+            let checkEq = check state copyState
+            logger.I $"checkEq: %A{checkEq}"
+
+            Expect.equal true checkEq "checkEq"
+        }
+
+    let test path =
+        runTestsWithCLIArgs [] Array.empty (runTest path) |> ignore
 
 [<EntryPoint>]
 let main args =
@@ -371,7 +390,6 @@ let main args =
 
     if version.IsSome then
         logger.I $""
-
 
     let init = result.TryGetResult Init
 
