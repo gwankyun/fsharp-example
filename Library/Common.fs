@@ -7,47 +7,6 @@ open System.Diagnostics
 open FSharpPlus
 open System.Text
 
-module Directory =
-    let getFileSystemEntries path searchPattern (searchOption: SearchOption) =
-        Directory.GetFileSystemEntries(path, searchPattern, searchOption)
-
-    let getAllFileSystemEntries path =
-        getFileSystemEntries path "*" SearchOption.AllDirectories
-
-    let enumerateFileSystemEntriesAll path =
-        Directory.EnumerateFileSystemEntries(path, "", SearchOption.AllDirectories)
-
-    let createDirectory path =
-        Directory.CreateDirectory(path)
-
-    let createDir path =
-        createDirectory path |> ignore
-
-    let exists path =
-        Directory.Exists(path)
-
-    let current =
-        // Environment.CurrentDirectory
-        Directory.GetCurrentDirectory()
-
-    let baseDir =
-        AppContext.BaseDirectory
-
-    let delete path recursive =
-        Directory.Delete(path, recursive)
-
-module AppContext =
-    let baseDir =
-        AppContext.BaseDirectory
-
-module String =
-    // type _T = string
-    // let split (sep: _T) (s: _T) =
-    //     s.Split(sep)
-
-    let startsWith (value: string) (str: string) =
-        str.StartsWith(value)
-
 module Path =
     let getRelativePath relateTo path =
         Path.GetRelativePath(relateTo, path)
@@ -63,6 +22,7 @@ module Path =
 
     let combine (path1: string) (path2: string) =
         Path.Combine(path1, path2)
+
 
 module FileInfo =
     let ofFullName path =
@@ -94,6 +54,55 @@ module FileInfo =
 
     let lastWriteTime (file: FileInfo) =
         file.LastWriteTime
+
+module Directory =
+    let getFileSystemEntries path searchPattern (searchOption: SearchOption) =
+        Directory.GetFileSystemEntries(path, searchPattern, searchOption)
+
+    let getAllFileSystemEntries path =
+        getFileSystemEntries path "*" SearchOption.AllDirectories
+
+    let enumerateFileSystemEntriesAll path =
+        Directory.EnumerateFileSystemEntries(path, "", SearchOption.AllDirectories)
+
+    let createDirectory path =
+        Directory.CreateDirectory(path)
+
+    let createDir path =
+        createDirectory path |> ignore
+
+    let exists path =
+        Directory.Exists(path)
+
+    let createDirectoryFor (path: string) =
+        let dir =
+            FileInfo.ofFullName path
+            |> FileInfo.directoryName
+        if exists dir |> not then
+            createDir dir
+
+    let current =
+        // Environment.CurrentDirectory
+        Directory.GetCurrentDirectory()
+
+    let baseDir =
+        AppContext.BaseDirectory
+
+    let delete path recursive =
+        Directory.Delete(path, recursive)
+
+module AppContext =
+    let baseDir =
+        AppContext.BaseDirectory
+
+module String =
+    // type _T = string
+    // let split (sep: _T) (s: _T) =
+    //     s.Split(sep)
+
+    let startsWith (value: string) (str: string) =
+        str.StartsWith(value)
+
 
 module File =
     let copy source dest overwrite =

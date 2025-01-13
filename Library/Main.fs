@@ -24,8 +24,6 @@ module Main =
         let dir =
             FileInfo.ofFullName path
             |> FileInfo.directoryName
-        // if dir <> null && (not dir.Exists) then
-        //     dir.Create() |> ignore
         if Directory.exists dir |> not then
             Directory.createDir dir
 

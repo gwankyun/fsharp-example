@@ -56,6 +56,26 @@ module Item =
         else
             FileItem(path = p, lastWrite = lw)
 
+type RelaPath =
+    | RelaDir of path: string * rela: string
+    | RelaFile of path: string * rela: string
+
+module RelaPath =
+    let copy (source: RelaPath) dest =
+        match source with
+        | RelaDir(_, rela) ->
+            Directory.createDir <| Path.join dest rela
+        | RelaFile(path, rela) ->
+            let destPath = Path.join  dest rela
+            Directory.createDirectoryFor destPath
+            File.copy (Path.join path rela) destPath true
+
+    let ofPath relateTo path =
+        let rela = Path.getRelativePath relateTo path
+        match path |> FileInfo.ofFullName |> FileInfo.isDir with
+        | true -> RelaDir(relateTo, rela)
+        | false -> RelaFile(relateTo, rela)
+
 // type Info =
 //     { Type: string
 //       LastWrite: DateTime
@@ -69,7 +89,7 @@ module DirCompare =
             let state = Path.join path statePost
             createDirIfNotExists state
 
-    let pred (x: System.IO.FileInfo) =
+    let pred (x: FileInfo) =
         x.FullName
         |> String.startsWith statePost
         |> not
@@ -367,6 +387,18 @@ module Diff =
             logger.I $"checkEq: %A{checkEq}"
 
             Expect.equal true checkEq "checkEq"
+
+            logger.I $"path: %A{path}"
+            logger.I $"copyPath: %A{copyPath}"
+
+            let xyz = Path.join path @"x\y\z.txt"
+            Directory.createDirectoryFor xyz
+            File.writeAllText xyz "x"
+
+            let rela = RelaPath.ofPath path xyz
+            logger.I $"rela: %A{rela}"
+
+            RelaPath.copy rela copyPath
         }
 
     let test path =
