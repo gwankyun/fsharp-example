@@ -56,25 +56,60 @@ module Item =
         else
             FileItem(path = p, lastWrite = lw)
 
+type RelativePath =
+    | RelativeDir of path: string
+    | RelativeFile of path: string
+
 type RelaPath =
-    | RelaDir of path: string * rela: string
-    | RelaFile of path: string * rela: string
+    | RelaDir of path: string * relaTo: Type.Path
+    | RelaFile of path: string * relaTo: Type.Path
+
+// type RelaInfo =
+//     | Rela
 
 module RelaPath =
     let copy (source: RelaPath) dest =
+        let joinDest = Path.join dest
         match source with
-        | RelaDir(_, rela) ->
-            Directory.createDir <| Path.join dest rela
-        | RelaFile(path, rela) ->
-            let destPath = Path.join  dest rela
+        | RelaDir(rela, _) ->
+            let destPath = joinDest rela
+            Directory.createDir destPath
+        | RelaFile(rela, path) ->
+            let destPath = joinDest rela
             Directory.createDirectoryFor destPath
-            File.copy (Path.join path rela) destPath true
+            let sourcePath = Path.join path rela
+            File.copy sourcePath destPath true
+
+    let path (p: RelaPath) =
+        match p with
+        | RelaDir(rela, _) -> rela
+        | RelaFile(rela, _) -> rela
 
     let ofPath relateTo path =
         let rela = Path.getRelativePath relateTo path
         match path |> FileInfo.ofFullName |> FileInfo.isDir with
-        | true -> RelaDir(relateTo, rela)
-        | false -> RelaFile(relateTo, rela)
+        | true -> RelaDir(rela, relateTo)
+        | false -> RelaFile(rela, relateTo)
+
+    let ofDir relateTo path =
+        let rela = Path.getRelativePath relateTo path
+        RelaDir(rela, relateTo)
+
+    let ofFile relateTo path =
+        let rela = Path.getRelativePath relateTo path
+        RelaFile(rela, relateTo)
+
+    let ofFileSystemInfo relateTo (info: FileSystemInfo) =
+        let fullName = info.FullName
+        let rela = Path.getRelativePath relateTo fullName
+        match info with
+        | :? DirectoryInfo -> RelaDir(rela, relateTo)
+        | :? FileInfo -> RelaFile(rela, relateTo)
+        | _ -> failwith "other FileSystemInfo"
+
+    let enumerate path =
+        Directory.enumerateFileSystemInfos path
+        |> Seq.map (ofFileSystemInfo path)
 
 // type Info =
 //     { Type: string
@@ -395,10 +430,37 @@ module Diff =
             Directory.createDirectoryFor xyz
             File.writeAllText xyz "x"
 
-            let rela = RelaPath.ofPath path xyz
+            let rela = RelaPath.ofFile path xyz
             logger.I $"rela: %A{rela}"
 
-            RelaPath.copy rela copyPath
+            // RelaPath.copy rela copyPath
+
+            // let e = Directory.enumerateFileSystemInfos path
+            // for i in e do
+            //     logger.I $"e: %A{i}"
+            //     match i with
+            //     | :? DirectoryInfo -> logger.I $"Dir"
+            //     | :? FileInfo -> logger.I $"File"
+            //     | _ -> ()
+            deleteIfExists path
+            Directory.createDir path
+            Main.initSrc path
+
+            deleteIfExists copyPath
+            Directory.createDir copyPath
+
+            RelaPath.enumerate path
+            |> Seq.iter (fun x -> RelaPath.copy x copyPath)
+
+            let ri x =
+                x
+                |> Seq.map RelaPath.path
+                |> Seq.sort
+                |> Seq.toList
+
+            let rp = RelaPath.enumerate path |> ri
+            let rc = RelaPath.enumerate copyPath |> ri
+            Expect.equal rp rc "xxxx"
         }
 
     let test path =

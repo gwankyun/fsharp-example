@@ -7,6 +7,13 @@ open System.Diagnostics
 open FSharpPlus
 open System.Text
 
+// type PathInfo = string
+
+module Type =
+    type Path = string
+
+let s: Type.Path = ""
+
 module Path =
     let getRelativePath relateTo path =
         Path.GetRelativePath(relateTo, path)
@@ -22,7 +29,6 @@ module Path =
 
     let combine (path1: string) (path2: string) =
         Path.Combine(path1, path2)
-
 
 module FileInfo =
     let ofFullName path =
@@ -90,6 +96,19 @@ module Directory =
 
     let delete path recursive =
         Directory.Delete(path, recursive)
+
+    let enumerateFileSystemInfos path =
+        let opt = new EnumerationOptions();
+        opt.RecurseSubdirectories <- true;
+        let info = new DirectoryInfo(path)
+        info.EnumerateFileSystemInfos("*", opt);
+
+// module DirectoryInfo =
+//     let enumerateFileSystemInfos path =
+//         let opt = new EnumerationOptions();
+//         opt.RecurseSubdirectories <- true;
+//         let info = new DirectoryInfo(path)
+//         info.EnumerateFileSystemInfos("*", opt);
 
 module AppContext =
     let baseDir =
