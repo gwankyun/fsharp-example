@@ -56,6 +56,35 @@ module Item =
         else
             FileItem(path = p, lastWrite = lw)
 
+    let path (item: Item) =
+        match item with
+        | DirItem(p, _) -> p
+        | FileItem(p, _) -> p
+
+    let toString (item: Item) =
+        match item with
+        | DirItem(path, lastWrite) ->
+            let lwt = lastWrite.ToString(timeFormat)
+            $"d|%s{lwt}|%s{path}"
+        | FileItem(path, lastWrite) ->
+            let lwt = lastWrite.ToString(timeFormat)
+            $"f|%s{lwt}|%s{path}"
+
+    let ofFileSystemInfo relateTo (info: FileSystemInfo) =
+        let fullName = info.FullName
+        let rela = Path.getRelativePath relateTo fullName
+        let lwt = info.LastWriteTime
+        match info with
+        | :? DirectoryInfo -> DirItem(rela, lwt)
+        | :? FileInfo -> FileItem(rela, lwt)
+        | _ -> failwith "other FileSystemInfo"
+
+    let toFileInfo relateTo (item: Item) =
+        match item with
+        | DirItem(_) -> failwith "not File"
+        | FileItem(p, _) ->
+            FileInfo.ofFullName <| Path.join relateTo p
+
 type RelativePath =
     | RelativeDir of path: string
     | RelativeFile of path: string
@@ -214,25 +243,11 @@ module Diff =
 
     let addState path pred =
         let fileCont path =
-            // path
-            // |> Array.collect Directory.getAllFileSystemEntries
-            // |> List.toArray
-            Directory.getAllFileSystemEntries path
-            |> Array.sortWith sort
-            |> Array.map (fun i ->
-                let info = i |> FileInfo.ofFullName
-                let rela = Path.getRelativePath path info.FullName
-                let t = 
-                    match info.FullName |> Directory.exists with
-                    | true -> "d"
-                    | false -> "f"
-                let lwt = info.LastWriteTime.ToString(timeFormat)
-                t, lwt, rela
-                // $"%s{t}|%s{lwt}|%s{rela}"
-                )
-            |> Array.filter pred
-            |> Array.map (fun (t, lwt, rela) ->
-                $"%s{t}|%s{lwt}|%s{rela}")
+            Directory.enumerateFileSystemInfos path
+            |> Seq.map (Item.ofFileSystemInfo path)
+            |> Seq.sortWith (sortWith Item.path)
+            |> Array.ofSeq
+
         // for i in fileCont do
         //     logger.I $"%s{i}"
         // path |> Array.collect fileCont
@@ -241,8 +256,12 @@ module Diff =
     let stateToMap state =
         state
         |> Array.map (fun x ->
-            let a = String.split [@"|"] x |> Seq.toArray
-            a[2], (a[0], a[1]))
+            // let a = String.split [@"|"] x |> Seq.toArray
+            // a[2], (a[0], a[1])
+            match x with
+            | DirItem(p, w) as d -> p, d
+            | FileItem(p, w) as f -> p, f
+            )
         |> Map.ofArray
 
     let check state copyState =
@@ -258,10 +277,6 @@ module Diff =
 
         let compare =
             Map.compare pathMap copyMap
-            |> Map.map (fun k (a, b) ->
-                let toItem = tupleToItem k
-                let mapItem = Option.map toItem
-                (mapItem a), (mapItem b))
             |> Map.filter (fun _ (a, b) ->
                 match a, b with
                 | Some(DirItem(_)), Some(DirItem(_)) -> false
@@ -287,26 +302,25 @@ module Diff =
         let newFile =
             state
             |> Array.filter (fun x ->
-                let s = String.split [@"|"] x |> Array.ofSeq
-                let t = s[0]
-                // let info = s[2] |> FileInfo.ofFullName
-                let dt = DateTime.ParseExact(s[1], timeFormat, null)
-                dt > now && t = "f"
+                match x with
+                | DirItem(_) -> false
+                | FileItem(p, w) -> w > now
                 )
             // |> Array.sortWith sort
         logger.I $"newFile: %A{newFile}"
 
         // 複製出來
-        deleteIfExists <| Path.join Directory.current "newFile"
+        let newFilePath = Path.join Directory.current "newFile"
+        deleteIfExists newFilePath
         for i in newFile do
-            let s = String.split [@"|"] i |> Array.ofSeq
+            let p = Item.path i
+
             let info =
-                FileInfo.ofFullName <| Path.joinList [
-                    Directory.current; "newFile"; s[2]
-                ]
+                Item.toFileInfo newFilePath i
+
             if info.Directory.Exists |> not then
                 info.Directory.Create()
-            let src = FileInfo.ofFullName <| Path.join path s[2]
+            let src = FileInfo.ofFullName <| Path.join path p
             logger.I $"src: %A{src}"
             src.CopyTo(info.FullName) |> ignore
 
@@ -320,7 +334,10 @@ module Diff =
             Map.toArray
             >> Array.filter pred
             >> Array.sortWith (sortWith fst)
-            >> Array.map (fun (k, (t, d)) -> $"{t}|{d}|{k}")
+            >> Array.map (fun (k, item) ->
+                item |> Item.toString
+                // $"{t}|{d}|{k}"
+                )
 
         logger.I text
 
@@ -335,9 +352,17 @@ module Diff =
 
         let addItem =
             Map.difference pathMap copyMap
-            |> mapToArray (fun (_, (t, _)) -> t = "d")
+            |> mapToArray (fun (_, item) ->
+                match item with
+                | FileItem(_) -> true
+                | _ -> false
+            )
         logger.I $"addItem: \n%A{addItem}"
         logger.I text
+
+        // let updateItem =
+        //     Map.compare pathMap copyMap
+        //     |> 
 
         Path.join Directory.current "newFile", deleteItem, addItem
 
@@ -355,8 +380,14 @@ module Diff =
             let item = Item.ofString i
             let join = Path.join copyPath
             match item with
-            | DirItem(p, d) -> Directory.createDir <| join p
-            | FileItem(p, d) -> File.copy <| Path.join path p <| join p <| true
+            | DirItem(p, _) -> Directory.createDir <| join p
+            | FileItem(p, _) ->
+                let src = Path.join path p
+                let dest = join p
+                if File.exists src |> not then
+                    failwith $"%s{src} not exist"
+                Directory.createDirectoryFor dest
+                File.copy src dest true
 
         logger.I text
 
@@ -426,45 +457,115 @@ module Diff =
             logger.I $"path: %A{path}"
             logger.I $"copyPath: %A{copyPath}"
 
-            let xyz = Path.join path @"x\y\z.txt"
-            Directory.createDirectoryFor xyz
-            File.writeAllText xyz "x"
+            // let xyz = Path.join path @"x\y\z.txt"
+            // Directory.createDirectoryFor xyz
+            // File.writeAllText xyz "x"
 
-            let rela = RelaPath.ofFile path xyz
-            logger.I $"rela: %A{rela}"
+            // let rela = RelaPath.ofFile path xyz
+            // logger.I $"rela: %A{rela}"
 
-            // RelaPath.copy rela copyPath
+            // deleteIfExists path
+            // Directory.createDir path
+            // Main.initSrc path
 
-            // let e = Directory.enumerateFileSystemInfos path
-            // for i in e do
-            //     logger.I $"e: %A{i}"
-            //     match i with
-            //     | :? DirectoryInfo -> logger.I $"Dir"
-            //     | :? FileInfo -> logger.I $"File"
-            //     | _ -> ()
-            deleteIfExists path
-            Directory.createDir path
-            Main.initSrc path
+            // deleteIfExists copyPath
+            // Directory.createDir copyPath
 
-            deleteIfExists copyPath
-            Directory.createDir copyPath
+            // RelaPath.enumerate path
+            // |> Seq.iter (fun x -> RelaPath.copy x copyPath)
 
-            RelaPath.enumerate path
-            |> Seq.iter (fun x -> RelaPath.copy x copyPath)
+            // let ri x =
+            //     x
+            //     |> Seq.map RelaPath.path
+            //     |> Seq.sort
+            //     |> Seq.toList
 
-            let ri x =
-                x
-                |> Seq.map RelaPath.path
-                |> Seq.sort
-                |> Seq.toList
-
-            let rp = RelaPath.enumerate path |> ri
-            let rc = RelaPath.enumerate copyPath |> ri
-            Expect.equal rp rc "xxxx"
+            // let rp = RelaPath.enumerate path |> ri
+            // let rc = RelaPath.enumerate copyPath |> ri
+            // Expect.equal rp rc "xxxx"
         }
 
     let test path =
         runTestsWithCLIArgs [] Array.empty (runTest path) |> ignore
+
+module DiffLocal =
+    type State = Item []
+
+    type Difference =
+        { Modification: State
+          Creation: State
+          Deletion: State
+        }
+
+    module State =
+        let empty: State = Array.empty
+
+        let add path =
+            Directory.enumerateFileSystemInfos path
+            |> Seq.map (Item.ofFileSystemInfo path)
+            |> Seq.sortWith (Diff.sortWith Item.path)
+            |> Array.ofSeq
+
+        let write dest (state: State) =
+            state
+            |> Array.map Item.toString
+            |> File.writeAllLines dest
+
+        let read path : State=
+            File.readAlllines path
+            |> Array.map Item.ofString
+
+        let diff (newState: State) (oldState: State) =
+            let stateToMap (state: State) =
+                state
+                |> Array.map (fun x ->
+                    match x with
+                    | DirItem(p, _) as d -> p, d
+                    | FileItem(p, _) as f -> p, f)
+                |> Map.ofArray
+            let newMap = stateToMap newState
+            let oldMap = stateToMap oldState
+            let mapToArray m =
+                m
+                |> Map.toArray
+                |> Array.sortWith (Diff.sortWith fst)
+                |> Array.map snd
+            let modifyItem =
+                Map.compare newMap oldMap
+                |> Map.filter (fun _ v ->
+                    match v with
+                    | Some(DirItem(_)), Some(FileItem(_)) -> true
+                    | Some(FileItem(_)), Some(DirItem(_)) -> true
+                    | Some(FileItem(_, nw)), Some(FileItem(_, ow)) ->
+                        nw <> ow
+                    | _ -> false)
+                |> Map.map (fun _ v ->
+                    match v with
+                    | Some(item), Some(_) -> item
+                    | _ -> failwith "not modify")
+                |> mapToArray
+                |> Array.rev
+            let deleteItem =
+                Map.difference oldMap newMap
+                |> mapToArray
+            let addItem =
+                Map.difference newMap oldMap
+                |> mapToArray
+            // addItem, modifyItem, deleteItem
+            {
+                Difference.Modification = modifyItem
+                Creation = addItem
+                Deletion = deleteItem
+            }
+
+    module Difference =
+        let write path (difference: Difference) =
+            let modification = difference.Modification
+            let creation = difference.Creation
+            let deletion = difference.Deletion
+            if Directory.exists path then
+                Directory.delete path true
+            
 
 [<EntryPoint>]
 let main args =
