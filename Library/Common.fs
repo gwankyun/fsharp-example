@@ -171,6 +171,10 @@ module DirectoryInfo =
     let getFiles (dir: DirectoryInfo) =
         dir.GetFiles()
 
+module FileSystemInfo =
+    let lastWriteTime (info: FileSystemInfo) =
+        info.LastWriteTime
+
 module Match =
     // type T = Match
     let groupsArray (m: Match) =

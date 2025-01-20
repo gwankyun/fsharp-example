@@ -9,6 +9,7 @@ open System.IO
 open System.Threading
 open FSharpPlus
 open Expecto
+open FSharpPlus.Operators
 
 let logger = Logger.ColorConsole
 
@@ -19,6 +20,10 @@ type CliArguments =
     | Compare of path: string * dir1: string * dir2: string
     | Add of path: string * saveFile: string
     | Test of dir: string
+    | InitTest of dir: string
+    | UpdateTest of dir: string
+    | Diff of path: string * tag1: string * tag2: string
+    | Merge of path: string * diff: string
 
     interface IArgParserTemplate with
         member this.Usage =
@@ -28,7 +33,11 @@ type CliArguments =
             | Init path -> "初始化"
             | Compare(path, dir1, dir2) -> "對比"
             | Add(path, saveFile) -> "添加"
+            | Diff(path, tag1, tag2) -> "對比"
+            | Merge(path: string, diff) -> "對比"
             | Test dir -> "測試"
+            | InitTest dir -> "測試"
+            | UpdateTest dir -> "測試"
 
 let createDirIfNotExists path =
     if path |> Directory.exists |> not then
@@ -60,6 +69,11 @@ module Item =
         match item with
         | DirItem(p, _) -> p
         | FileItem(p, _) -> p
+
+    let lastWrite (item: Item) =
+        match item with
+        | DirItem(_, d) -> d
+        | FileItem(_, d) -> d
 
     let toString (item: Item) =
         match item with
@@ -488,7 +502,7 @@ module Diff =
     let test path =
         runTestsWithCLIArgs [] Array.empty (runTest path) |> ignore
 
-module DiffLocal =
+module DirDiff =
     type State = Item []
 
     type Difference =
@@ -500,7 +514,10 @@ module DiffLocal =
     module State =
         let empty: State = Array.empty
 
-        let add path =
+        let isEmpty (state: State) =
+            state |> Array.isEmpty
+
+        let add path : State =
             Directory.enumerateFileSystemInfos path
             |> Seq.map (Item.ofFileSystemInfo path)
             |> Seq.sortWith (Diff.sortWith Item.path)
@@ -511,7 +528,7 @@ module DiffLocal =
             |> Array.map Item.toString
             |> File.writeAllLines dest
 
-        let read path : State=
+        let read path : State =
             File.readAlllines path
             |> Array.map Item.ofString
 
@@ -548,24 +565,239 @@ module DiffLocal =
             let deleteItem =
                 Map.difference oldMap newMap
                 |> mapToArray
+                |> Array.rev
             let addItem =
                 Map.difference newMap oldMap
                 |> mapToArray
-            // addItem, modifyItem, deleteItem
             {
                 Difference.Modification = modifyItem
                 Creation = addItem
                 Deletion = deleteItem
             }
 
+        // let equal state1 state2 =
+        //     let d = diff state1 state2
+        //     d |> isEmpty
+
+    let deleteIfExists path recursive =
+        if Directory.exists path then
+            Directory.delete path true
+
     module Difference =
-        let write path (difference: Difference) =
+        let isEmpty difference =
             let modification = difference.Modification
             let creation = difference.Creation
             let deletion = difference.Deletion
-            if Directory.exists path then
-                Directory.delete path true
-            
+            [ modification; creation; deletion ] |> List.forall State.isEmpty
+
+        let write source diffPath (difference: Difference) =
+            let modification = difference.Modification
+            let creation = difference.Creation
+            let deletion = difference.Deletion
+            deleteIfExists diffPath true
+            Directory.createDir diffPath
+            let joinDest = Path.join diffPath
+            let writeState state name =
+                state |> State.write (joinDest name)
+            writeState modification "modification.txt"
+            writeState creation "creation.txt"
+            writeState deletion "deletion.txt"
+            // 從源目錄複製
+            let creationDest = Path.join diffPath "creation"
+            Directory.createDir creationDest
+            for i in creation do
+                match i with
+                | DirItem(p, _) ->
+                    let destDir = Path.join diffPath p
+                    Directory.createDir destDir
+                | FileItem(p, _) ->
+                    let srcFile = Path.join source p
+                    let destFile = Path.join diffPath p
+                    File.copy srcFile destFile true
+
+            let modificationDest = Path.join diffPath "modification"
+            Directory.createDir modificationDest
+            for i in modification do
+                match i with
+                | DirItem(_) -> ()
+                | FileItem(p, _) ->
+                    let srcFile = Path.join source p
+                    let destFile = Path.join diffPath p
+                    Directory.createDirectoryFor destFile
+                    File.copy srcFile destFile true
+
+        let read path =
+            let readState name =
+                State.read <| Path.join path name
+            let modification = readState "modification.txt"
+            let creation = readState "creation.txt"
+            let deletion = readState "deletion.txt"
+            {
+                Modification = modification
+                Creation = creation
+                Deletion = deletion
+            }
+
+        let merge diffPath dest =
+            let difference = read diffPath
+            let modification = difference.Modification
+            let creation = difference.Creation
+            let deletion = difference.Deletion
+
+            let copyFile rela =
+                let srcFile = Path.join diffPath rela
+                let destFile = Path.join dest rela
+                File.copy srcFile destFile true
+
+            for i in creation do
+                match i with
+                | DirItem(p, _) ->
+                    let destDir = Path.join dest p
+                    Directory.createDir destDir
+                | FileItem(p, _) ->
+                    copyFile p
+
+            for i in modification do
+                match i with
+                | DirItem(_) -> failwith "modification dir"
+                | FileItem(p, _) ->
+                    copyFile p
+
+            for i in deletion do
+                match i with
+                | DirItem(p, _) ->
+                    let destDir = Path.join dest p
+                    Directory.delete destDir false
+                | FileItem(p, _) ->
+                    let destFile = Path.join dest p
+                    assert (File.exists destFile)
+                    File.delete destFile
+
+    let testI path =
+        deleteIfExists path true
+
+        let sourcePath = Path.join path "source"
+        deleteIfExists sourcePath true
+        Main.initSrc sourcePath
+
+        let destPath = Path.join path "dest"
+        deleteIfExists destPath true
+        Main.copyDirectory sourcePath destPath true
+
+        let oldState = State.add sourcePath
+
+        Main.changeFile sourcePath |> ignore
+
+        let newState = State.add sourcePath
+
+        let diff = State.diff newState oldState
+        let diffPath = Path.join path "diff"
+        Directory.createDir diffPath
+
+        logger.I $"diff: %A{diff}"
+
+        Difference.write sourcePath diffPath diff
+
+        Difference.merge diffPath destPath
+        let destState = State.add destPath
+
+        let result = State.diff newState destState |> Difference.isEmpty
+        logger.I $"result: %A{result}"
+
+    let runTest path =
+        test "" {
+
+            let result = testI path
+            Expect.equal result result "equal"
+        }
+
+    let test path =
+        runTestsWithCLIArgs [] Array.empty (runTest path) |> ignore
+
+    module Str =
+        let init = ".dir-diff"
+        let state = "state"
+        let diff = "diff"
+        let ignoreFile = "ignore.txt"
+
+    let init path =
+        if Directory.exists path |> not then
+            invalidArg (nameof path) $"%A{path} not exists"
+
+        let initPath = Path.join path Str.init
+        if Directory.exists initPath |> not then
+            Directory.createDir initPath
+            let statePath = Path.join initPath Str.state
+            let diffPath = Path.join initPath Str.diff
+            Directory.createDir statePath
+            Directory.createDir diffPath
+            let ignoreFile = Path.join initPath Str.ignoreFile
+            File.writeAllTextEncoding ignoreFile Str.init Text.Encoding.UTF8
+
+    let initTest path =
+        Main.initSrc path
+
+    let updateTest path =
+        Main.changeFile path |> ignore
+
+    let add path tag =
+        if Directory.exists path |> not then
+            invalidArg (nameof path) $"%A{path} not exists"
+
+        let initPath = Path.join path Str.init
+        let statePath = Path.join initPath Str.state
+        let ignoreFile = Path.join initPath Str.ignoreFile
+        let ignoreList =
+            File.readAlllinesEncoding ignoreFile Text.Encoding.UTF8
+            |> Set.ofArray
+        let state =
+            State.add path
+            |> Array.filter (fun x ->
+                let startsWith = flip String.startsWith <| Item.path x
+                Set.exists startsWith ignoreList)
+        State.write (Path.join statePath tag) state
+
+    let list path =
+        if Directory.exists path |> not then
+            invalidArg (nameof path) $"%A{path} not exists"
+
+        let initPath = Path.join path Str.init
+        assert(Directory.exists initPath)
+        let statePath = Path.join initPath Str.state
+        assert(Directory.exists statePath)
+        let tapList =
+            Directory.enumerateFileSystemInfos statePath
+            |> Seq.map (Item.ofFileSystemInfo statePath)
+            |> Seq.sortBy Item.lastWrite
+        for i in tapList do
+            let p = Item.path i
+            printfn $"%A{p}"
+
+    let diff path tag1 tag2 =
+        if Directory.exists path |> not then
+            invalidArg (nameof path) $"%A{path} not exists"
+
+        let initPath = Path.join path Str.init
+        assert(Directory.exists initPath)
+        let statePath = Path.join initPath Str.state
+        assert(Directory.exists statePath)
+        let diffPath = Path.join initPath Str.diff
+        assert(Directory.exists diffPath)
+
+        let state1Path = Path.join statePath $"%s{tag1}.txt"
+        assert(File.exists state1Path)
+        let state2Path = Path.join statePath $"%s{tag2}.txt"
+        assert(File.exists state2Path)
+
+        let state1 = State.read state1Path
+        let state2 = State.read state2Path
+        let difference = State.diff state1 state2
+        Difference.write path
+            (Path.join diffPath $"%s{tag1}-%s{tag2}")
+            difference
+
+    let merge path diff =
+        Difference.merge diff path
 
 [<EntryPoint>]
 let main args =
@@ -591,13 +823,33 @@ let main args =
     if init.IsSome then
         // 創建.state文件夾
         logger.I $"{init.Value}"
-        DirCompare.init init.Value
+        // DirCompare.init init.Value
+        DirDiff.init init.Value
+
+    let initTest = result.TryGetResult InitTest
+    if initTest.IsSome then
+        DirDiff.initTest initTest.Value
+
+    let updateTest = result.TryGetResult UpdateTest
+    if updateTest.IsSome then
+        DirDiff.updateTest updateTest.Value
 
     let add = result.TryGetResult Add
 
     if add.IsSome then
         let path, file = add.Value
-        DirCompare.add path file
+        // DirCompare.add path file
+        DirDiff.add path file
+
+    let diff = result.TryGetResult Diff
+    if diff.IsSome then
+        let path , tag1, tag2 = diff.Value
+        DirDiff.diff path tag1 tag2
+
+    let merge = result.TryGetResult Merge
+    if merge.IsSome then
+        let path, diffPath = merge.Value
+        DirDiff.merge path diffPath    
 
     let compare = result.TryGetResult Compare
     if compare.IsSome then
@@ -607,8 +859,6 @@ let main args =
 
     let test = result.TryGetResult Test
     if test.IsSome then
-        // DirCompare.test test.Value
-        // Diff.addState test.Value
-        Diff.test test.Value
+        DirDiff.test test.Value
 
     exit 0
