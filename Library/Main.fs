@@ -31,16 +31,57 @@ module Main =
         createDirectoryFor path
         File.writeAllTextEncoding path contents Encoding.UTF8
 
+    type Entry =
+        | DirEntry of path: string * content: Entry list
+        | TextFileEntry of path: string * encoding: Encoding * content: string
+
+    module Entry =
+        let rec write (path: string) (entry: Entry) =
+            match entry with
+            | DirEntry(p, content) ->
+                let current = Path.join path p
+                Directory.createDir current
+                content |> List.iter (write current)
+            | TextFileEntry(p, encoding, content) ->
+                let file = Path.join path p
+                File.writeAllTextEncoding file content encoding
+
     let initSrc src =
-        writeAllText (Path.join src @"fst\snd\delete.txt") ""
-        writeAllText (Path.join src @"fst\snd\update.txt") ""
-        writeAllText (Path.join src @"fst\snd\nochange.txt") ""
-        writeAllText (Path.join src @"u\update.txt") ""
+        // writeAllText (Path.join src @"fst\snd\delete.txt") ""
+        // writeAllText (Path.join src @"fst\snd\update.txt") ""
+        // writeAllText (Path.join src @"fst\snd\nochange.txt") ""
+        // writeAllText (Path.join src @"u\update.txt") ""
 
-        writeAllText (Path.join src @"d\delete.txt") ""
+        // writeAllText (Path.join src @"d\delete.txt") ""
 
-        writeAllText (Path.join src @"u\git\1.txt") ""
-        writeAllText (Path.join src @"u\git\2.txt") ""
+        // writeAllText (Path.join src @"u\git\1.txt") ""
+        // writeAllText (Path.join src @"u\git\2.txt") ""
+
+        let d = new System.IO.DirectoryInfo(src)
+        let s = d.Name
+        let p = d.Parent.FullName
+
+        let entry =
+            DirEntry(s, [
+                DirEntry("fst", [
+                    DirEntry("snd", [
+                        TextFileEntry("delete.txt", Encoding.UTF8, "");
+                        TextFileEntry("update.txt", Encoding.UTF8, "");
+                        TextFileEntry("nochange.txt", Encoding.UTF8, "");
+                    ]);
+                ]);
+                DirEntry("u", [
+                    TextFileEntry("update.txt", Encoding.UTF8, "");
+                    DirEntry("git", [
+                        TextFileEntry("1.txt", Encoding.UTF8, "");
+                        TextFileEntry("2.txt", Encoding.UTF8, "");
+                    ]);
+                ]);
+                DirEntry("d", [
+                    TextFileEntry("delete.txt", Encoding.UTF8, "");
+                ]);
+            ])
+        Entry.write p entry
 
     let changeFile dest =
         // 新增文件

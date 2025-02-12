@@ -678,16 +678,23 @@ module DirDiff =
 
         let sourcePath = Path.join path "source"
         deleteIfExists sourcePath true
+
+        // 初始目錄
         Main.initSrc sourcePath
 
         let destPath = Path.join path "dest"
         deleteIfExists destPath true
+
+        // 複製一件
         Main.copyDirectory sourcePath destPath true
 
+        // 舊狀態
         let oldState = State.add sourcePath
 
+        // 更新目錄
         Main.changeFile sourcePath |> ignore
 
+        // 新狀態
         let newState = State.add sourcePath
 
         let diff = State.diff newState oldState
@@ -698,6 +705,7 @@ module DirDiff =
 
         Difference.write sourcePath diffPath diff
 
+        // 合併
         Difference.merge diffPath destPath
         let destState = State.add destPath
 
@@ -715,9 +723,17 @@ module DirDiff =
         runTestsWithCLIArgs [] Array.empty (runTest path) |> ignore
 
     module Str =
+        /// <summary>配置目錄</summary>
+        /// <returns>".dir-diff"</returns>
         let init = ".dir-diff"
+        /// <summary></summary>
+        /// <returns></returns>
         let state = "state"
+        /// <summary></summary>
+        /// <returns></returns>
         let diff = "diff"
+        /// <summary></summary>
+        /// <returns></returns>
         let ignoreFile = "ignore.txt"
 
     let init path =
@@ -773,6 +789,11 @@ module DirDiff =
             let p = Item.path i
             printfn $"%A{p}"
 
+    /// <summary>對比目錄</summary>
+    /// <param name="path"></param>
+    /// <param name="tag1"></param>
+    /// <param name="tag2"></param>
+    /// <returns></returns>
     let diff path tag1 tag2 =
         if Directory.exists path |> not then
             invalidArg (nameof path) $"%A{path} not exists"
@@ -835,7 +856,6 @@ let main args =
         DirDiff.updateTest updateTest.Value
 
     let add = result.TryGetResult Add
-
     if add.IsSome then
         let path, file = add.Value
         // DirCompare.add path file
