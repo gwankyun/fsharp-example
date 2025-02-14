@@ -33,7 +33,7 @@ module Main =
 
     type Entry =
         | DirEntry of path: string * content: Entry list
-        | TextFileEntry of path: string * encoding: Encoding * content: string
+        | FileEntry of path: string
 
     module Entry =
         let rec write (path: string) (entry: Entry) =
@@ -42,9 +42,9 @@ module Main =
                 let current = Path.join path p
                 Directory.createDir current
                 content |> List.iter (write current)
-            | TextFileEntry(p, encoding, content) ->
+            | FileEntry(p) ->
                 let file = Path.join path p
-                File.writeAllTextEncoding file content encoding
+                File.writeAllTextEncoding file "" Encoding.UTF8
 
     let initSrc src =
         // writeAllText (Path.join src @"fst\snd\delete.txt") ""
@@ -65,20 +65,20 @@ module Main =
             DirEntry(s, [
                 DirEntry("fst", [
                     DirEntry("snd", [
-                        TextFileEntry("delete.txt", Encoding.UTF8, "");
-                        TextFileEntry("update.txt", Encoding.UTF8, "");
-                        TextFileEntry("nochange.txt", Encoding.UTF8, "");
+                        FileEntry("delete.txt");
+                        FileEntry("update.txt");
+                        FileEntry("nochange.txt");
                     ]);
                 ]);
                 DirEntry("u", [
-                    TextFileEntry("update.txt", Encoding.UTF8, "");
+                    FileEntry("update.txt");
                     DirEntry("git", [
-                        TextFileEntry("1.txt", Encoding.UTF8, "");
-                        TextFileEntry("2.txt", Encoding.UTF8, "");
+                        FileEntry("1.txt");
+                        FileEntry("2.txt");
                     ]);
                 ]);
                 DirEntry("d", [
-                    TextFileEntry("delete.txt", Encoding.UTF8, "");
+                    FileEntry("delete.txt");
                 ]);
             ])
         Entry.write p entry
