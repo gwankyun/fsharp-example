@@ -33,6 +33,12 @@ type Entry =
     | DirEntry of path: string
     | FileEntry of path: string
 
+module Entry =
+    let path (entry: Entry) =
+        match entry with
+        | DirEntry path -> path
+        | FileEntry path -> path
+
 module Path =
     let getRelativePath relativeTo path =
         Path.GetRelativePath(relativeTo, path)
@@ -77,14 +83,39 @@ module Directory =
         | true ->
             innerTraverse [DirEntry(path)] [] []
 
+module Process =
+    /// <summary>启动一个新的进程并执行指定的命令，同时捕获其标准输出。</summary>
+    /// <param name="name">要执行的进程的可执行文件的名称。</param>
+    /// <param name="args">传递给进程的参数列表。</param>
+    /// <returns>进程执行后的标准输出结果。</returns>
+    let start name args =
+        let proc = new System.Diagnostics.Process()
+        let info = proc.StartInfo
+        info.FileName <- name
+        for a in args do
+            info.ArgumentList.Add(a)
+        info.UseShellExecute <- false
+        info.RedirectStandardOutput <- true
+
+        proc.Start() |> ignore
+        let result = proc.StandardOutput.ReadToEnd()
+        proc.WaitForExit()
+        result
+
 let entryList path =
     Directory.traverse path
 
 let dirEntryList, fileEntryList =
-    entryList @"E:\local\fsharp-example\compare\dest"
+    // entryList @"E:\local\fsharp-example\compare\dest"
+    entryList @"c:\Users\liangjunquan\Downloads\C++\C++多線程\"
 
 for i in dirEntryList do
     printfn $"d: %A{i}"
 
-for i in fileEntryList do
-    printfn $"f: %A{i}"
+for p in fileEntryList do
+    // printfn $"f: %A{i}"
+    let i = p |> Entry.path
+    Process.start "opencc" [
+        "-i"; i;
+        "-c"; @"C:\local\vcpkg\installed\x64-windows\share\opencc\t2s.json";
+        "-o"; i] |> ignore
