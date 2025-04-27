@@ -1,5 +1,7 @@
 ﻿// For more information see https://aka.ms/fsharp-console-apps
 open System.IO
+open Common
+open System.Text.Json
 
 printfn "Hello from F#"
 
@@ -102,20 +104,62 @@ module Process =
         proc.WaitForExit()
         result
 
-let entryList path =
-    Directory.traverse path
+let t2s path =
+    let entryList path =
+        Directory.traverse path
 
-let dirEntryList, fileEntryList =
-    // entryList @"E:\local\fsharp-example\compare\dest"
-    entryList @"c:\Users\liangjunquan\Downloads\C++\C++多線程\"
+    let dirEntryList, fileEntryList =
+        entryList path
 
-for i in dirEntryList do
-    printfn $"d: %A{i}"
+    for i in dirEntryList do
+        printfn $"d: %A{i}"
 
-for p in fileEntryList do
-    // printfn $"f: %A{i}"
-    let i = p |> Entry.path
-    Process.start "opencc" [
-        "-i"; i;
-        "-c"; @"C:\local\vcpkg\installed\x64-windows\share\opencc\t2s.json";
-        "-o"; i] |> ignore
+    for p in fileEntryList do
+        // printfn $"f: %A{i}"
+        let i = p |> Entry.path
+        Process.start "opencc" [
+            "-i"; i;
+            "-c"; @"C:\local\vcpkg\installed\x64-windows\share\opencc\t2s.json";
+            "-o"; i] |> ignore
+
+// t2s @"c:\Users\liangjunquan\Downloads\C++\C++多線程\"
+
+module DirCompare =
+    let add path =
+        let d, f = Directory.traverse path
+        let relativePath p =
+            Path.getRelativePath path (Entry.path p)
+        let d =
+            d
+            |> List.map relativePath
+        let f =
+            f
+            |> List.map relativePath
+        d, f
+
+let root = @"C:\Users\liangjunquan\AppData\Roaming\Tencent\WXWork\Update\Umi-OCR_Paddle_v2.1.5\UmiOCR-data\"
+let d, f =
+    Directory.traverse root
+
+for i in d do
+    let rela = Path.getRelativePath root (Entry.path i)
+    printfn $"d: %A{rela}"
+
+printfn "%A" Directory.baseDir
+
+let config = Path.join Directory.baseDir "config.json"
+
+type Config = {
+    t2s: string
+}
+
+if File.exists config then
+    printfn "config.json exists"
+    let configStr = File.readAllText config
+    let config =
+        JsonSerializer.Deserialize<Config> configStr
+    printfn $"t2s: %A{config.t2s}"
+    t2s config.t2s
+else
+    printfn "config.json not exists"
+    // File.writeAllTextEncoding

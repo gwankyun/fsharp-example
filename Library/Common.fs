@@ -5,7 +5,7 @@ open System.IO
 open System.Text.RegularExpressions
 open System.Diagnostics
 open FSharpPlus
-open System.Text
+// open System.Text.Json
 
 // type PathInfo = string
 
@@ -103,6 +103,12 @@ module Directory =
         let info = new DirectoryInfo(path)
         info.EnumerateFileSystemInfos("*", opt);
 
+    let enumerateDirectories path =
+        Directory.EnumerateDirectories(path)
+
+    let enumerateFiles path =
+        Directory.EnumerateFiles(path)
+
 // module DirectoryInfo =
 //     let enumerateFileSystemInfos path =
 //         let opt = new EnumerationOptions();
@@ -144,6 +150,12 @@ module File =
         if path |> FileInfo.ofFullName |> FileInfo.isDir then
             failwith $"{path} is Dir"
         File.ReadAllLines(path, encoding)
+
+    let readAllText path =
+        File.ReadAllText(path)
+
+    let readAllTextEncoding path encoding =
+        File.ReadAllText(path, encoding)
 
     let writeAllText path (contents: string) =
         File.WriteAllText(path, contents)
@@ -310,3 +322,22 @@ module Map =
             | Some result -> s |> Map.add t result
             | None -> s
             ) Map.empty keys
+
+module Process =
+    /// <summary>启动一个新的进程并执行指定的命令，同时捕获其标准输出。</summary>
+    /// <param name="name">要执行的进程的可执行文件的名称。</param>
+    /// <param name="args">传递给进程的参数列表。</param>
+    /// <returns>进程执行后的标准输出结果。</returns>
+    let start name args =
+        let proc = new System.Diagnostics.Process()
+        let info = proc.StartInfo
+        info.FileName <- name
+        for a in args do
+            info.ArgumentList.Add(a)
+        info.UseShellExecute <- false
+        info.RedirectStandardOutput <- true
+
+        proc.Start() |> ignore
+        let result = proc.StandardOutput.ReadToEnd()
+        proc.WaitForExit()
+        result
