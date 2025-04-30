@@ -341,3 +341,44 @@ module Process =
         let result = proc.StandardOutput.ReadToEnd()
         proc.WaitForExit()
         result
+
+module extra =
+    type Entry =
+        | DirEntry of path: string
+        | FileEntry of path: string
+
+    module Entry =
+        let path (entry: Entry) =
+            match entry with
+            | DirEntry path -> path
+            | FileEntry path -> path
+
+    module Directory =
+        /// <summary>遍历指定路径下的所有目录和文件</summary>
+        /// <param name="path">要遍历的路径</param>
+        /// <returns>返回一个元组，包含目录条目列表和文件条目列表</returns>
+        let traverse path =
+            let rec innerTraverse entryList dirResult fileResult=
+                match entryList with
+                | [] -> dirResult, fileResult
+                | entry::rest ->
+                    match entry with
+                    | DirEntry path ->
+                        let dirList =
+                            Directory.enumerateDirectories path
+                            |> Seq.map DirEntry
+                            |> Seq.toList
+                        let fileList =
+                            Directory.enumerateFiles path
+                            |> Seq.map FileEntry
+                            |> Seq.toList
+                        let concat a b = List.concat [ a; b ]
+                        let rest = concat rest dirList
+                        let fileResult = concat fileResult fileList
+                        let dirResult = concat dirResult dirList
+                        innerTraverse rest dirResult fileResult
+                    | FileEntry _ -> dirResult, fileResult
+            match Directory.exists path with
+            | false -> [], []
+            | true ->
+                innerTraverse [DirEntry path] [] []
