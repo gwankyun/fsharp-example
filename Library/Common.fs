@@ -242,14 +242,29 @@ module Environment =
 let compareWith f a b =
     compare (f a) (f b)
 
+//let mapTuple (f: 'a -> 'b) (tuple: 'a * 'a) : 'b * 'b =
+//    let x, y = tuple  // 解构输入元组为两个 'a 元素
+//    (f x, f y)
 
+module Tuple2 =
+    let map f tuple =
+        let a, b = tuple
+        f a, f b
+
+    let swap tuple =
+        let a, b = tuple
+        b, a
 
 module Map =
-    let keysSet (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
-        let toSet x = x |> Map.keys |> Set.ofSeq
-        let keys1 = table1 |> toSet
-        let keys2 = table2 |> toSet
-        keys1, keys2
+    //let kesy
+
+    //let 
+
+    //let keysSet (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+    //    let toSet x = x |> Map.keys |> Set.ofSeq
+    //    let keys1 = table1 |> toSet
+    //    let keys2 = table2 |> toSet
+    //    keys1, keys2
 
 
     /// <summary>兩個表的交集</summary>
@@ -285,13 +300,16 @@ module Map =
             | Some value -> s |> Map.add t value
             | None -> s) Map.empty
 
+    // 對比
     let compare (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
-        let keys1, keys2 = keysSet table1 table2
+        let toSet x = x |> Map.keys |> Set.ofSeq
+        let keys1, keys2 = Tuple2.map toSet (table1, table2)
         Set.union keys1 keys2
         |> Set.toSeq
         |> Seq.map (fun x ->
             let tryFind = Map.tryFind x
-            x, (tryFind table1, tryFind table2))
+            let tuple = Tuple2.map tryFind (table1, table2)
+            x, tuple)
         |> Map.ofSeq
 
     /// <summary>`table1` - `table2`，以鍵為對比</summary>
@@ -352,6 +370,12 @@ module extra =
             match entry with
             | DirEntry path -> path
             | FileEntry path -> path
+
+        let lastWriteTime (entry: Entry) =
+            let path = path entry
+            path
+            |> FileInfo.ofFullName
+            |> FileInfo.lastWriteTime
 
     module Directory =
         /// <summary>遍历指定路径下的所有目录和文件</summary>
