@@ -278,7 +278,7 @@ let mapTests =
         let d, f, dd, df = testDirCreation path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -301,7 +301,7 @@ let mapTests =
         let d, f, dd, df = testFileCreation path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -322,7 +322,7 @@ let mapTests =
         let d, f, dd, df = testDirCreationOther path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -344,7 +344,7 @@ let mapTests =
         let d, f, dd, df = testDirCreationInside path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -366,7 +366,7 @@ let mapTests =
         let d, f, dd, df = testFileCreationOther path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -387,7 +387,7 @@ let mapTests =
         let d, f, dd, df = testFileCreationInside path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -408,7 +408,7 @@ let mapTests =
         let d, f, dd, df = testDirDeletion path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -429,7 +429,7 @@ let mapTests =
         let d, f, dd, df = testDirDeletionInside path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -450,7 +450,7 @@ let mapTests =
         let d, f, dd, df = testFileModification path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -471,7 +471,7 @@ let mapTests =
         let d, f, dd, df = testFileModificationInside path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -492,7 +492,7 @@ let mapTests =
         let d, f, dd, df = testFileDeletion path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -513,7 +513,7 @@ let mapTests =
         let d, f, dd, df = testFileDeletionInside path d f
 
         // 同步到backup
-        Status.merge dd df path backup
+        Status.merge dd df path backup |> ignore
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
