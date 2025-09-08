@@ -6,6 +6,19 @@ open System.Text.Json
 open System.Text
 open Expecto
 open FSLogger
+//open FSharp.SystemTextJson
+//tem.Text.Json.Serialization
+open System.Text.Json.Serialization
+
+// 1. Either create the serializer options from the F# options...
+let options =
+    JsonFSharpOptions.Default()
+        // Add any .WithXXX() calls here to customize the format
+        .ToJsonSerializerOptions()
+
+// 创建 JsonSerializerOptions 并配置 F# 支持
+//let options = JsonSerializerOptions()
+//options.Converters.Add(FSharpJsonConverter())
 
 let logger = Logger.ColorConsole
 
@@ -135,6 +148,8 @@ module EntryDiff =
     let dataDir = "data"
 
     let save src dest (e: T) =
+        if Directory.exists dest |> not then
+            Directory.createDir dest
         let ls = Difference.toList e.DirDiff e.FileDiff
         for i in ls do
             match i with
@@ -144,12 +159,12 @@ module EntryDiff =
                 Directory.createDirectoryFor destPath
                 File.copy srcPath destPath true
             | _ -> ()
-        let text = JsonSerializer.Serialize<(string * Operation) list>(ls)
+        let text = JsonSerializer.Serialize<(string * Operation) list>(ls, options)
         File.writeAllTextEncoding (Path.join dest "info.json") text Encoding.UTF8
 
     let load dest =
         let text = File.readAllTextEncoding (Path.join dest "info.json") Encoding.UTF8
-        let info = JsonSerializer.Deserialize<(string * Operation) list>(text)
+        let info = JsonSerializer.Deserialize<(string * Operation) list>(text, options)
         info
 
 type Status = {
@@ -407,12 +422,12 @@ let mapTests =
         let status, entry = testDirCreation path status
         let { Dir = d; File = f } = status
 
-        //let diffDirCreation = Path.join diff "1"
-        //EntryDiff.save path diffDirCreation entry
+        let diffDirCreation = Path.join diff "1"
+        EntryDiff.save path diffDirCreation entry
 
         // 同步到backup
-        Status.merge entry path backup
-        //Status.merge2 diffDirCreation backup
+        //Status.merge entry path backup
+        Status.merge2 diffDirCreation backup
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
