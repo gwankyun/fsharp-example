@@ -16,17 +16,7 @@ let options =
         // Add any .WithXXX() calls here to customize the format
         .ToJsonSerializerOptions()
 
-// 创建 JsonSerializerOptions 并配置 F# 支持
-//let options = JsonSerializerOptions()
-//options.Converters.Add(FSharpJsonConverter())
-
 let logger = Logger.ColorConsole
-
-//module File =
-//    begin
-//        let readLines path =
-//            File.ReadLines(path, System.Text.Encoding.UTF8)
-//    end
 
 printfn "Hello from F#"
 
@@ -35,15 +25,10 @@ type Item = {
     LastWrite: int64
 }
 
-type DataType = Item list
+let inline (</>) path1 path2 = Path.join path1 path2
 
-module DateType =
-    let toStringList (dt: DataType) =
-        dt
-        |> List.map (fun x -> x.Path)
-
-    //let ofStringList strList
-    //    |>
+let inline (|?) (option: 'T option) defaultValue = 
+    Option.defaultValue defaultValue option
 
 let relativePath parent path =
     Path.getRelativePath parent path
@@ -60,15 +45,70 @@ let writeFile name text =
     let path = Path.join Directory.baseDir name
     File.writeAllTextEncoding path text Encoding.UTF8
 
-
-
 // 讀入
 
 let readFile name =
     let path = Path.join Directory.baseDir name
     File.readAllTextEncoding path Encoding.UTF8
 
-let progress path info : DataType =
+type Difference = {
+    Creation: string list
+    Modification: string list
+    Deletion: string list
+}
+
+module DateType =
+    type T = Item list
+
+    let toStringList (dt: T) =
+        dt
+        |> List.map (fun x -> x.Path)
+
+    let compare (oldData: T) (newData: T) : Difference =
+        let index (data: T) =
+            data
+            |> List.map (fun x -> x.Path)
+            |> List.indexed
+            |> List.map Tuple2.swap
+            |> Map.ofList
+        let indexOld = index oldData
+        let indexNew = index newData
+        let toMap (data: T) =
+            data
+            |> List.map (fun d -> d.Path, d.LastWrite)
+            |> Map.ofList
+        let mapOld, mapNew = Tuple2.map toMap (oldData, newData)
+        let c = Map.compare mapOld mapNew
+        let toList x =
+            x
+            |> Map.toList
+            |> List.map fst
+        let creation =
+            c
+            |> Map.filter (fun _ (a, b) ->
+                a.IsNone && b.IsSome
+                )
+            |> toList
+            |> List.sortBy (fun x -> indexNew[x])
+        let deletion =
+            c
+            |> Map.filter (fun _ (a, b) ->
+                a.IsSome && b.IsNone
+                )
+            |> toList
+            |> List.sortBy (fun x -> indexOld[x])
+        let modification =
+            c
+            |> Map.filter (fun _ (a, b) ->
+                Option.map2 (<>) a b |? false
+                )
+            |> toList
+            |> List.sortBy (fun x -> indexNew[x])
+        { Creation = creation
+          Modification = modification
+          Deletion = deletion }
+
+let progress path info : DateType.T =
     info
     |> List.map (fun x ->
         let rela = relativePath path
@@ -76,8 +116,6 @@ let progress path info : DataType =
           LastWrite =
             x |> Entry.lastWriteTime |> DateTime.toFileTime }
         )
-
-//let d, f = Directory.traverse ""
 
 let testRoot path =
     let root = path
@@ -92,29 +130,11 @@ let testRoot path =
         f
         |> progress root
 
-    let dtext = JsonSerializer.Serialize<DataType>(dinfo)
-    let ftext = JsonSerializer.Serialize<DataType>(finfo)
+    let dtext = JsonSerializer.Serialize<DateType.T>(dinfo)
+    let ftext = JsonSerializer.Serialize<DateType.T>(finfo)
 
     writeFile "dtext.json" dtext
     writeFile "ftext.json" ftext
-
-//for p, d in dinfo do
-//    printfn $"d: %A{p} %A{d}"
-
-//for p, d in finfo do
-//    printfn $"f: %A{p} %A{d}"
-
-// 寫入本地
-
-type Difference = {
-    Creation: string list
-    Modification: string list
-    Deletion: string list
-}
-
-//type Entry =
-//    | Dir
-//    | File
 
 type EntryDiff = {
     DirDiff: Difference
@@ -123,21 +143,18 @@ type EntryDiff = {
 
 type Operation =
     | DirCreation
-    | FileCopying
+    | FileCreation
+    | FileModification
     | DirDeletion
     | FileDeletion
-
-// 创建并注册转换器
-//let settings = JsonSerializer. JsonSerializerSettings()
-//settings.Converters.Add(DiscriminatedUnionConverter<Operation>())
 
 module Difference =
     type T = Difference
     let toList (dir: T) (file: T) =
         let trans op = List.map (fun x -> x, op)
         [ dir.Creation |> trans DirCreation;
-          file.Creation |> trans FileCopying;
-          file.Modification |> trans FileCopying;
+          file.Creation |> trans FileCreation;
+          file.Modification |> trans FileModification;
           file.Deletion |> trans FileDeletion |> List.rev;
           dir.Deletion |> trans DirDeletion |> List.rev; ]
         |> List.concat
@@ -146,44 +163,48 @@ module EntryDiff =
     type T = EntryDiff
 
     let dataDir = "data"
+    let backupDir = "backup"
 
     let save src dest (e: T) =
         if Directory.exists dest |> not then
             Directory.createDir dest
         let ls = Difference.toList e.DirDiff e.FileDiff
+        Directory.createDir (dest </> dataDir)
+        Directory.createDir (dest </> backupDir)
         for i in ls do
             match i with
-            | path, FileCopying ->
-                let srcPath = Path.join src path
-                let destPath = Path.join3 dest dataDir path
+            | path, FileCreation ->
+                let srcPath = src </> path
+                let destPath = dest </> dataDir </> path
+                Directory.createDirectoryFor destPath
+                File.copy srcPath destPath true
+            | path, FileModification ->
+                let srcPath = src </> path
+                let destPath = dest </> dataDir </> path
                 Directory.createDirectoryFor destPath
                 File.copy srcPath destPath true
             | _ -> ()
         let text = JsonSerializer.Serialize<(string * Operation) list>(ls, options)
-        File.writeAllTextEncoding (Path.join dest "info.json") text Encoding.UTF8
+        File.writeAllTextEncoding (dest </> "info.json") text Encoding.UTF8
 
     let load dest =
-        let text = File.readAllTextEncoding (Path.join dest "info.json") Encoding.UTF8
+        let text = File.readAllTextEncoding (dest </> "info.json") Encoding.UTF8
         let info = JsonSerializer.Deserialize<(string * Operation) list>(text, options)
         info
 
 type Status = {
-        Dir: DataType
-        File: DataType
+        Dir: DateType.T
+        File: DateType.T
     }
 
 module Status =
-    //type Difference = {
-    //    Creation: string list
-    //    Modification: string list
-    //    Deletion: string list
-    //}
+    type T = Status
 
     let copyNeed (d: Difference) (f: Difference) src dest =
         // 目錄創建，淺到深
         let createDir = d.Creation
         for i in createDir do
-            let path = Path.join dest i
+            let path = dest </> i
             Directory.createDir path
 
         // 文件修改
@@ -191,8 +212,8 @@ module Status =
 
         let copy fileList =
             for i in fileList do
-                let srcPath = Path.join src i
-                let destPath = Path.join dest i
+                let srcPath = src </> i
+                let destPath = dest </> i
                 if Directory.exists srcPath then
                     //assert(false)
                     failwith $"%A{srcPath} is dir"
@@ -206,31 +227,6 @@ module Status =
         copy createFile
         createDir, (List.append modifyFile createFile)
 
-    //module Difference =
-    //    let writeBase path diff =
-    //        let text = JsonSerializer.Serialize<DataType>(diff)
-    //        File.writeAllTextEncoding path text Encoding.UTF8
-
-    //    let readBase path =
-    //        let text = File.readAllTextEncoding path Encoding.UTF8
-    //        JsonSerializer.Deserialize<DataType>(text)
-
-    //    //let getImport dir file =
-    //    //    let 
-
-    //    let write src path dir file =
-    //        let d, f = copyNeed dir file src (Path.join path "data")
-    //        let w data file =
-    //            let file = Path.join path file
-    //            File.writeAllLinesEncoding file data Encoding.UTF8
-    //        w d "dir.txt"
-    //        w f "file.txt"
-
-        //let read path =
-        //    let dir = readBase (Path.join path "dir.json")
-        //    let file = readBase (Path.join path "file.json")
-        //    dir, file
-
     let fromPath path : Status =
         let d, f =
             Directory.traverse path
@@ -238,12 +234,12 @@ module Status =
         { Dir = d; File = f }
 
     let write path info =
-        let text = JsonSerializer.Serialize<DataType>(info)
+        let text = JsonSerializer.Serialize<DateType.T>(info)
         File.writeAllTextEncoding path text Encoding.UTF8
 
     let read path =
         let text = File.readAllTextEncoding path Encoding.UTF8
-        JsonSerializer.Deserialize<DataType>(text)
+        JsonSerializer.Deserialize<DateType.T>(text)
 
     //let merge (d: Difference) (f: Difference) src dest =
     let merge (entry: EntryDiff) src dest =
@@ -267,44 +263,51 @@ module Status =
             | path, FileDeletion ->
                 let destPath = Path.join dest path
                 File.delete destPath
-            | path, FileCopying ->
+            | path, FileCreation ->
+                let srcPath = Path.join src path
+                let destPath = Path.join dest path
+                File.copy srcPath destPath true
+            | path, FileModification ->
                 let srcPath = Path.join src path
                 let destPath = Path.join dest path
                 File.copy srcPath destPath true
 
-        //// 文件刪除，深到淺
-        //let deleteFile = f.Deletion |> List.rev
-        //for i in deleteFile do
-        //    let path = Path.join dest i
-        //    File.delete path
-
-        //// 目錄刪除，深到淺
-        //let deleteDir = d.Deletion |> List.rev
-        //for i in deleteDir do
-        //    let path = Path.join dest i
-        //    Directory.delete path true
-
-        //copyNeed d f src dest
-
-    let merge2 src dest =
+    let merge2 src dest backup =
         let ls = EntryDiff.load src
-        let src = Path.join src EntryDiff.dataDir
+        let backupDir = src </> EntryDiff.backupDir
+        let src = src </> EntryDiff.dataDir
+        let backupFile path =
+            if backup then
+                let backupPath = backupDir </> path
+                let destPath = dest </> path
+                if File.exists destPath then
+                    Directory.createDirectoryFor backupPath
+                    File.copy destPath backupPath true
         for i in ls do
             match i with
             | path, DirCreation ->
-                let destPath = Path.join dest path
+                let destPath = dest </> path
                 logger.D $"DirCreation: %A{destPath}"
                 Directory.createDir destPath
             | path, DirDeletion ->
-                let destPath = Path.join dest path
+                let destPath = dest </> path
                 logger.D $"DirDeletion: %A{destPath}"
                 Directory.delete destPath true
             | path, FileDeletion ->
-                let destPath = Path.join dest path
+                let destPath = dest </> path
+                logger.D $"FileDeletion: %A{destPath}"
+                backupFile path
                 File.delete destPath
-            | path, FileCopying ->
-                let srcPath = Path.join src path
-                let destPath = Path.join dest path
+            | path, FileCreation ->
+                let srcPath = src </> path
+                let destPath = dest </> path
+                logger.D $"FileCopying: %A{destPath}"
+                File.copy srcPath destPath true
+            | path, FileModification ->
+                let srcPath = src </> path
+                let destPath = dest </> path
+                backupFile path
+                logger.D $"FileCopying: %A{destPath}"
                 File.copy srcPath destPath true
 
     let equal src dest =
@@ -321,62 +324,11 @@ module Status =
             failwith $"%A{sf} %A{df}"
         (sd = dd) && (sf = df)
 
-    let compare (oldData: DataType) (newData: DataType) : Difference =
-        let index (data: DataType) =
-            data
-            |> List.map (fun x -> x.Path)
-            |> List.indexed
-            |> List.map Tuple2.swap
-            |> Map.ofList
-        let indexOld = index oldData
-        let indexNew = index newData
-        let toMap (data: DataType) =
-            data
-            |> List.map (fun d -> d.Path, d.LastWrite)
-            |> Map.ofList
-        let mapOld, mapNew = Tuple2.map toMap (oldData, newData)
-        let c = Map.compare mapOld mapNew
-        let toList x =
-            x
-            |> Map.toList
-            |> List.map fst
-        //optionMinus a b =
-        //    let da, db = Tuple2.map (Option.defaultValue 0) (a, b)
-        //    a
-        //    |> Option.bind (fun v -> )
-        let creation =
-            c
-            |> Map.filter (fun _ (a, b) ->
-                match a, b with
-                | None, Some(_) -> true
-                | _ -> false
-                )
-            |> toList
-            |> List.sortBy (fun x -> indexNew[x])
-        let deletion =
-            c
-            |> Map.filter (fun _ (a, b) ->
-                match a, b with
-                | Some(_), None -> true
-                | _ -> false
-                )
-            |> toList
-            |> List.sortBy (fun x -> indexOld[x])
-        let modification =
-            c
-            |> Map.filter (fun _ (a, b) ->
-                match a, b with
-                | Some(dtA), Some(dtB) -> dtA <> dtB
-                | _ -> false
-                )
-            |> toList
-            |> List.sortBy (fun x -> indexNew[x])
-        { Creation = creation
-          Modification = modification
-          Deletion = deletion }
-
-//Common.
-
+    let compare (oldData: T) (newData: T) : EntryDiff.T =
+        let { Dir = oldDir; File = oldFile } = oldData
+        let { Dir = newDir; File = newFile } = newData
+        { DirDiff = DateType.compare oldDir newDir;
+          FileDiff = DateType.compare oldFile newFile }
 
 printfn $"%A{Directory.baseDir}"
 
@@ -387,13 +339,13 @@ let createDir path =
 
 let mapTests =
     test "map test" {
-        let path = Path.join Directory.baseDir "test"
+        let path = Directory.baseDir </> "test"
         createDir path
 
-        let backup = Path.join Directory.baseDir "backup"
+        let backup = Directory.baseDir </> "backup"
         createDir backup
 
-        let diff = Path.join Directory.baseDir "diff"
+        let diff = Directory.baseDir </> "diff"
         createDir diff
 
         let { Dir = d; File = f } = Status.fromPath path
@@ -406,76 +358,70 @@ let mapTests =
 
         // 添加一個目錄
         let testDirCreation path (status: Status) =
-            Directory.createDir (Path.join path "d1")
-            let { Dir = d1; File = f1 } = Status.fromPath path
+            Directory.createDir (path </> "d1")
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
             let md, mf = Tuple2.map toStr (d1, f1)
             Expect.equal md ["d1"] "d1"
             Expect.equal mf [] "f = []"
-            let { Dir = d; File = f } = status
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
-            Expect.equal (diffDir.Creation) ["d1"] "diff.Creation"
-            //{ Dir = d1; File = f1 }, diffDir, diffFile
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            let diff = Status.compare status newStatus
+            Expect.equal (diff.DirDiff.Creation) ["d1"] "diff.Creation"
+            newStatus, diff
 
         let status, entry = testDirCreation path status
         let { Dir = d; File = f } = status
 
-        let diffDirCreation = Path.join diff "1"
-        EntryDiff.save path diffDirCreation entry
+        let saveAndMerge name entry =
+            let diffFileCreation = diff </> name
+            // 導出增量包
+            EntryDiff.save path diffFileCreation entry
 
-        // 同步到backup
-        //Status.merge entry path backup
-        Status.merge2 diffDirCreation backup
+            // 同步到backup
+            Status.merge2 diffFileCreation backup true
+
+        saveAndMerge "dir-creation" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
 
         // 添加一個文件
         let testFileCreation path status =
-            let newFile = Path.join path "f1.txt"
+            let newFile = path </> "f1.txt"
             File.writeAllText newFile ""
-            //let d1, f1 = Status.fromPath path
-            let { Dir = d1; File = f1 } = Status.fromPath path
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
             let md, mf = Tuple2.map toStr (d1, f1)
             Expect.equal md ["d1"] "d1"
             Expect.equal mf ["f1.txt"] "f = []"
-            let { Dir = d; File = f } = status
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
+            let diff = Status.compare status newStatus
+            let diffFile = diff.FileDiff
             Expect.equal (diffFile.Creation) ["f1.txt"] "diff.Creation"
 
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            newStatus, diff
 
         let status, entry = testFileCreation path status
 
-        // 同步到backup
-        Status.merge entry path backup
+        saveAndMerge "file-creation" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
 
         // 再添加一個目錄
         let testDirCreationOther path status =
-            Directory.createDir (Path.join path "d2")
-            //let d1, f1 = Status.fromPath path
-            let { Dir = d1; File = f1 } = Status.fromPath path
+            Directory.createDir (path </> "d2")
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
             let md, mf = Tuple2.map toStr (d1, f1)
             Expect.equal md ["d1"; "d2"] "d1"
             Expect.equal mf ["f1.txt"] "f = []"
-            let { Dir = d; File = f } = status
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
+            let diff = Status.compare status newStatus
+            let diffDir = diff.DirDiff
             Expect.equal (diffDir.Creation) ["d2"] "diff.Creation"
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            newStatus, diff
 
         let status, entry = testDirCreationOther path status
 
-        // 同步到backup
-        Status.merge entry path backup
+        saveAndMerge "dir-creation-other" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
@@ -483,222 +429,186 @@ let mapTests =
         // 添加二級目錄
         let testDirCreationInside path status =
             let newPath = @"d1\d3"
-            Directory.createDir (Path.join path newPath)
-            //let d1, f1 = Status.fromPath path
-            let { Dir = d1; File = f1 } = Status.fromPath path
+            Directory.createDir (path </> newPath)
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
             let md, mf = Tuple2.map toStr (d1, f1)
             Expect.equal md ["d1"; "d2"; newPath] "d1"
             Expect.equal mf ["f1.txt"] "f = []"
-            let { Dir = d; File = f } = status
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
+            let diff = Status.compare status newStatus
+            let diffDir = diff.DirDiff
             Expect.equal (diffDir.Creation) [newPath] "diff.Creation"
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            newStatus, diff
 
         let status, entry = testDirCreationInside path status
 
-        // 同步到backup
-        Status.merge entry path backup
+        saveAndMerge "dir-creation-inside" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
 
         // 添加一個文件
         let testFileCreationOther path status =
-            let newFile = Path.join path "f2.txt"
+            let newFile = path </> "f2.txt"
             File.writeAllText newFile ""
-            //let d1, f1 = Status.fromPath path
-            let { Dir = d1; File = f1 } = Status.fromPath path
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
             let md, mf = Tuple2.map toStr (d1, f1)
-            let { Dir = d; File = f } = status
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
+            let diff = Status.compare status newStatus
+            let diffFile = diff.FileDiff
             Expect.equal (diffFile.Creation) ["f2.txt"] "diff.Creation"
 
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            newStatus, diff
 
         let status, entry = testFileCreationOther path status
 
-        // 同步到backup
-        Status.merge entry path backup
+        saveAndMerge "file-creation-other" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
 
         // 添加深層文件
         let testFileCreationInside path status =
-            let newFile = Path.join path @"d1\f3.txt"
+            let newFile = path </> @"d1\f3.txt"
             File.writeAllText newFile ""
-            let { Dir = d1; File = f1 } = Status.fromPath path
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
             let md, mf = Tuple2.map toStr (d1, f1)
-            let { Dir = d; File = f } = status
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
+            let diff = Status.compare status newStatus
+            let diffFile = diff.FileDiff
             Expect.equal (diffFile.Creation) [@"d1\f3.txt"] "diff.Creation"
 
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            newStatus, diff
 
         let status, entry = testFileCreationInside path status
 
-        // 同步到backup
-        Status.merge entry path backup
+        saveAndMerge "file-creation-inside" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
 
         // 刪除目錄
         let testDirDeletion path status =
-            let deleteDir = Path.join path "d2"
+            let deleteDir = path </> "d2"
             if Directory.exists deleteDir then
                 Directory.delete deleteDir true
-            //let d1, f1 = Status.fromPath path
-            let { Dir = d1; File = f1 } = Status.fromPath path
-            let { Dir = d; File = f } = status
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
+            let diff = Status.compare status newStatus
+            let diffDir = diff.DirDiff
             Expect.equal (diffDir.Deletion) [@"d2"] "diff.Creation"
 
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            newStatus, diff
 
         let status, entry = testDirDeletion path status
 
-        printfn $"%A{status.Dir}"
-        printfn $"%A{status.File}"
-        //printfn $"dd %A{dd}"
-
-        // 同步到backup
-        Status.merge entry path backup
+        saveAndMerge "dir-deletion" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
 
         // 刪除深層目錄
         let testDirDeletionInside path status =
-            let deleteDir = Path.join path @"d1\d3"
+            let deleteDir = path </> @"d1\d3"
             if Directory.exists deleteDir then
                 Directory.delete deleteDir true
-            //let d1, f1 = Status.fromPath path
-            let { Dir = d1; File = f1 } = Status.fromPath path
-            let { Dir = d; File = f } = status
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
+            let diff = Status.compare status newStatus
+            let diffDir = diff.DirDiff
             Expect.equal (diffDir.Deletion) [ @"d1\d3"] "diff.Deletion"
 
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            newStatus, diff
 
         logger.D $"before============================================="
         let status, entry = testDirDeletionInside path status
 
-        // 同步到backup
-        logger.D $"entry: %A{entry}"
-        logger.D $"Dir: %A{entry.DirDiff}"
-        logger.D $"File: %A{entry.FileDiff}"
-        //Status.merge entry.Dir entry.File path backup |> ignore
-        //Status.merge entry path backup |> ignore
-        Status.merge entry path backup
-        logger.D $"end   ============================================="
+        saveAndMerge "dir-deletion-inside" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
 
         // 修改文件
         let testFileModification path status =
-            let newFile = Path.join path "f1.txt"
+            let newFile = path </> "f1.txt"
             File.writeAllText newFile "update"
-            //let d1, f1 = Status.fromPath path
-            let { Dir = d1; File = f1 } = Status.fromPath path
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
             let md, mf = Tuple2.map toStr (d1, f1)
-            let { Dir = d; File = f } = status
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
+            let diff = Status.compare status newStatus
+            let diffFile = diff.FileDiff
             Expect.equal (diffFile.Modification) ["f1.txt"] "diff.Modification"
 
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            newStatus, diff
 
         let status, entry = testFileModification path status
 
-        // 同步到backup
-        Status.merge entry path backup
+        saveAndMerge "file-modification" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
 
         // 修改文件
         let testFileModificationInside path status =
-            let file =  @"d1\f3.txt"
-            let newFile = Path.join path file
+            let file = @"d1\f3.txt"
+            let newFile = path </> file
             File.writeAllText newFile "update"
-            //let d1, f1 = Status.fromPath path
-            let { Dir = d1; File = f1 } = Status.fromPath path
-            let { Dir = d; File = f } = status
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
+            let diff = Status.compare status newStatus
+            let diffFile = diff.FileDiff
             Expect.equal (diffFile.Modification) [file] "diff.Modification"
 
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            newStatus, diff
 
         let status, entry = testFileModificationInside path status
 
-        // 同步到backup
-        Status.merge entry path backup
+        saveAndMerge "file-modification-inside" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
 
         // 删除文件
         let testFileDeletion path status =
-            let file =  @"f1.txt"
-            let opFile = Path.join path file
+            let file = @"f1.txt"
+            let opFile = path </> file
             File.delete opFile
-            //let d1, f1 = Status.fromPath path
-            let { Dir = d1; File = f1 } = Status.fromPath path
-            let { Dir = d; File = f } = status
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
+            let diff = Status.compare status newStatus
+            let diffFile = diff.FileDiff
             Expect.equal (diffFile.Deletion) [file] "diff.Modification"
 
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            newStatus, diff
 
         let status, entry = testFileDeletion path status
 
-        // 同步到backup
-        Status.merge entry path backup
+        saveAndMerge "file-deletion" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
 
         // 删除深層文件
         let testFileDeletionInside path status =
-            let file =  @"d1\f3.txt"
-            let opFile = Path.join path file
+            let file = @"d1\f3.txt"
+            let opFile = path </> file
             File.delete opFile
-            //let d1, f1 = Status.fromPath path
-            let { Dir = d1; File = f1 } = Status.fromPath path
-            let { Dir = d; File = f } = status
+            let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
 
-            let diffDir = Status.compare d d1
-            let diffFile = Status.compare f f1
+            let diff = Status.compare status newStatus
+            let diffFile = diff.FileDiff
             Expect.equal (diffFile.Deletion) [file] "diff.Modification"
 
-            { Dir = d1; File = f1 }, { EntryDiff.DirDiff = diffDir; FileDiff = diffFile }
+            newStatus, diff
 
         let status, entry = testFileDeletionInside path status
 
-        // 同步到backup
-        Status.merge entry path backup
+        saveAndMerge "file-deletion-inside" entry
 
         // 對比
         Expect.equal (Status.equal path backup) true ""
 
-        (d, f) |> ignore
+        (status, d, f) |> ignore
     }
 
 runTestsWithCLIArgs [] Array.empty mapTests

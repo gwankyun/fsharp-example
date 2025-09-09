@@ -30,6 +30,9 @@ module Path =
     let combine (path1: string) (path2: string) =
         Path.Combine(path1, path2)
 
+    let directoryName (path: string) =
+        Path.GetDirectoryName(path)
+
 module FileInfo =
     let ofFullName path =
         new FileInfo(path)
@@ -96,6 +99,10 @@ module Directory =
 
     let delete path recursive =
         Directory.Delete(path, recursive)
+
+    let deleteIfExists path recursive =
+        if exists path then
+            delete path recursive
 
     let enumerateFileSystemInfos path =
         let opt = new EnumerationOptions();
@@ -165,6 +172,7 @@ module File =
 
     let writeAllLines path (contents: string seq) =
         File.WriteAllLines(path, contents)
+
     let writeAllLinesEncoding path (contents: string seq) encoding =
         File.WriteAllLines(path, contents, encoding)
 
@@ -247,13 +255,11 @@ let compareWith f a b =
 //    (f x, f y)
 
 module Tuple2 =
-    let map f tuple =
-        let a, b = tuple
-        f a, f b
+    let inline map f (a, b) = f a, f b
 
-    let swap tuple =
-        let a, b = tuple
-        b, a
+    let inline swap (a, b) = b, a
+
+    let inline apply f (a, b) = f a b
 
 module Map =
     //let kesy
