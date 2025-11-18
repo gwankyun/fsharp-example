@@ -333,8 +333,7 @@ module Status =
 printfn $"%A{Directory.baseDir}"
 
 let createDir path =
-    if Directory.exists path then
-        Directory.delete path true
+    Directory.deleteIfExists path true
     Directory.createDir path
 
 let mapTests =
@@ -490,8 +489,7 @@ let mapTests =
         // 刪除目錄
         let testDirDeletion path status =
             let deleteDir = path </> "d2"
-            if Directory.exists deleteDir then
-                Directory.delete deleteDir true
+            Directory.deleteIfExists deleteDir true
             let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
 
             let diff = Status.compare status newStatus
@@ -510,8 +508,7 @@ let mapTests =
         // 刪除深層目錄
         let testDirDeletionInside path status =
             let deleteDir = path </> @"d1\d3"
-            if Directory.exists deleteDir then
-                Directory.delete deleteDir true
+            Directory.deleteIfExists deleteDir true
             let { Dir = d1; File = f1 } as newStatus = Status.fromPath path
 
             let diff = Status.compare status newStatus
