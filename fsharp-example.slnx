@@ -6,4 +6,5 @@
   <Project Path="Library/Library.fsproj" />
   <Project Path="startup/startup.fsproj" />
   <Project Path="t2s/t2s.fsproj" />
+  <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
 </Solution>
