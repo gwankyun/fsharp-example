@@ -1,10 +1,11 @@
 <Solution>
+  <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   <Project Path="diff/diff.fsproj" />
   <Project Path="dir-compare/dir-compare.fsproj" />
   <Project Path="exercise/exercise.fsproj" />
   <Project Path="fsharp-example.fsproj" />
+  <Project Path="FuncUI/FuncUI.fsproj" Id="a65add93-10be-44ac-92c5-0725a601619a" />
   <Project Path="Library/Library.fsproj" />
   <Project Path="startup/startup.fsproj" />
   <Project Path="t2s/t2s.fsproj" />
-  <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
 </Solution>
