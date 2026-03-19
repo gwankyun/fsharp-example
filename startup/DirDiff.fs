@@ -202,6 +202,7 @@ module Status =
         copy createFile
         createDir, (List.append modifyFile createFile)
 
+    /// <summary>·µ»ØÄ¿ä› î‘B</summary>
     let fromPath path : Status =
         let d, f =
             Directory.traverse path
