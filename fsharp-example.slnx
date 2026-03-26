@@ -9,4 +9,5 @@
   <Project Path="ParserCatalogJson/ParserCatalogJson.fsproj" Id="5afd0d7a-a145-4ff1-be97-ffe48211c6d4" />
   <Project Path="startup/startup.fsproj" />
   <Project Path="t2s/t2s.fsproj" />
+  <Project Path="Test/Test.fsproj" Id="b431160f-0ac9-43ff-90b6-900590b2290f" />
 </Solution>
