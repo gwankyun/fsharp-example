@@ -1,5 +1,6 @@
 <Solution>
   <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
+  <Project Path="ArguTest/ArguTest.fsproj" Id="a38d957c-be92-4c74-a8f1-e0d5e60fdefc" />
   <Project Path="diff/diff.fsproj" />
   <Project Path="dir-compare/dir-compare.fsproj" />
   <Project Path="exercise/exercise.fsproj" />
@@ -8,6 +9,7 @@
   <Project Path="Library/Library.fsproj" />
   <Project Path="ParserCatalogJson/ParserCatalogJson.fsproj" Id="5afd0d7a-a145-4ff1-be97-ffe48211c6d4" />
   <Project Path="startup/startup.fsproj" />
+  <Project Path="Status/Status.fsproj" Id="0527f5a3-dbc7-4721-b077-adcc7d2bf2b3" />
   <Project Path="t2s/t2s.fsproj" />
   <Project Path="Test/Test.fsproj" Id="b431160f-0ac9-43ff-90b6-900590b2290f" />
 </Solution>
