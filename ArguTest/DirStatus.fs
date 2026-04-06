@@ -67,12 +67,28 @@ let compare left right destination =
         //|> Map.ofSeq
     let leftJson = fromPath left
     let rightJson = fromPath right
-    //let diff =
-    //    Status.compareObject leftJson rightJson (fun x -> x.FullName)
-    //    |> Map.map (fun x ->
-    //        match x with
-    //        | Some le, Some ri -> { Status.Difference.FullName = }
-    //    )
+    let diff : Map<string, Status.Difference> =
+        Status.compareObject leftJson rightJson (fun x -> x.FullName)
+        |> Map.map (fun k v ->
+            match v with
+            | Some _, Some ri ->
+                { FullName = ri.FullName;
+                  PSIsContainer = ri.PSIsContainer;
+                  Operation = Status.Modification }
+            | Some le, None ->
+                { FullName = le.FullName;
+                  PSIsContainer = le.PSIsContainer;
+                  Operation = Status.Deletion }
+            | None, Some ri ->
+                { FullName = ri.FullName;
+                  PSIsContainer = ri.PSIsContainer;
+                  Operation = Status.Creation }
+            | _ -> failwith "fail"
+        )
+    let diff =
+        diff
+        |> Map.values
+    // 寫入文件
     ()
 
 let export path difference destination =
