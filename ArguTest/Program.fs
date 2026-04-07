@@ -55,12 +55,23 @@ type MergeArgs =
             | Path _ -> "指定源路径。"
             | Destination _ -> "指定目标路径。"
 
+type TestArgs =
+    | [<Path>] Path of path: string
+    | [<Dest>] Destination of destination: string
+
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Path _ -> "指定源路径。"
+            | Destination _ -> "指定目标路径。"
+
 // 主命令类型
 type MainArgs =
     | [<NoPrefix>] Add of ParseResults<AddArgs>
     | [<NoPrefix>] Compare of ParseResults<CompareArgs>
     | [<NoPrefix>] Export of ParseResults<ExportArgs>
     | [<NoPrefix>] Merge of ParseResults<MergeArgs>
+    | [<NoPrefix>] Test of ParseResults<TestArgs>
     | Version
 
     interface IArgParserTemplate with
@@ -71,6 +82,7 @@ type MainArgs =
             | Export _ -> "導出。"
             | Merge _ -> "合併。"
             | Version -> "显示版本信息。"
+            | Test _ -> "測試。"
 
 [<EntryPoint>]
 let main argv =
@@ -98,6 +110,10 @@ let main argv =
             let path = mergeResults.GetResult(MergeArgs.Path)
             let dest = mergeResults.GetResult(MergeArgs.Destination)
             DirStatus.merge path dest
+        | [Test testResults] ->
+            let path = testResults.GetResult(TestArgs.Path)
+            let dest = testResults.GetResult(TestArgs.Destination)
+            DirStatus.test path dest
         | [Version] ->
             printfn "版本 1.0.0"
         | _ ->

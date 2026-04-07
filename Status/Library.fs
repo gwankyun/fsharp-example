@@ -52,13 +52,16 @@ module Status =
                 // 如果是文件，直接返回
                 yield FileItem <| FileInfo path
             else
+                // 先添加当前目录本身
+                yield DirItem <| DirectoryInfo path 
+
                 // 获取当前目录中的所有文件
                 for file in Directory.getFiles path do
                     yield FileItem <| FileInfo file
                 
                 // 获取当前目录中的所有子目录
                 for dir in Directory.getDirectories path do
-                    yield DirItem <| DirectoryInfo dir
+                    //yield DirItem <| DirectoryInfo dir
                     
                     // 如果需要递归，继续处理子目录
                     if recurse then
