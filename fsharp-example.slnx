@@ -1,6 +1,6 @@
 <Solution>
   <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
-  <Project Path="DirStatus/ArguTest.fsproj" Id="a38d957c-be92-4c74-a8f1-e0d5e60fdefc" />
+  <Project Path="DirStatus/DirStatus.fsproj" Id="a38d957c-be92-4c74-a8f1-e0d5e60fdefc" />
   <Project Path="diff/diff.fsproj" />
   <Project Path="dir-compare/dir-compare.fsproj" />
   <Project Path="exercise/exercise.fsproj" />
