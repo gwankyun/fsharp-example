@@ -7,139 +7,81 @@ open System.Text
 open System.Text.Json
 open System.Text.Json.Serialization
 open Expecto
+open Common
 
-let options =
-    JsonFSharpOptions.Default()
-        .ToJsonSerializerOptions()
+//let options =
+//    JsonFSharpOptions.Default()
+//        .ToJsonSerializerOptions()
 
-// 启用格式化（带缩进）
-options.WriteIndented <- true
+//// 启用格式化（带缩进）
+//options.WriteIndented <- true
 
 let logger = Logger.ColorConsole
 
-let inline (+/) (path1: string) path2 =
-    Path.Join(path1, path2)
-
-module Directory =
-    let exists path =
-        Directory.Exists(path)
-
-    let delete path recusive =
-        Directory.Delete(path, recusive)
-
-    let deleteIfExists path recusive =
-        if exists path then
-            delete path recusive
-
-    let createDirectory path =
-        Directory.CreateDirectory path |> ignore
-
-    /// 复制目录及其所有内容
-    let rec copyDirectory sourceDir targetDir =
-        // 确保源目录存在
-        if exists sourceDir then
-            // 创建目标目录（如果不存在）
-            if not (exists targetDir) then
-                Directory.CreateDirectory targetDir |> ignore
-            
-            // 复制所有文件
-            Directory.GetFiles sourceDir
-            |> Array.iter (fun file ->
-                let fileName = Path.GetFileName file
-                let targetFile = Path.Combine(targetDir, fileName)
-                File.Copy(file, targetFile, true) // true 表示覆盖已存在的文件
-            )
-            
-            // 递归复制所有子目录
-            Directory.GetDirectories sourceDir
-            |> Array.iter (fun dir ->
-                let dirName = Path.GetFileName dir
-                let targetSubDir = Path.Combine(targetDir, dirName)
-                copyDirectory dir targetSubDir
-            )
-        else
-            failwithf "源目录不存在: %s" sourceDir
-
-module String =
-    let startsWith (sub: string) (str: string) =
-        str.StartsWith(sub)
-
-module Path =
-    let relativePath relativeTo path =
-        Path.GetRelativePath(relativeTo, path)
-
-    let join2 (path1: string) path2 =
-        Path.Join(path1, path2)
-
-    let join3 (path1: string) path2 path3 =
-        Path.Join(path1, path2, path3)
-
-    let join (path: string list) =
-        List.reduce join2 path
-
-module File =
-    let exists path =
-        File.Exists(path)
-
-    let delete path =
-        File.Delete(path)
-
-    let deleteIfExists p =
-        if exists p then
-            delete p
-
 let fromPath path =
     let content = File.ReadAllText(path, Encoding.UTF8)
-    JsonSerializer.Deserialize<Status.FileSystemInfoDetail seq>(content, options)
+    JsonSerializer.Deserialize<Status.RelativePath seq>(content, Common.options)
 
 module Status =
-    let add path (exclude: string list option) =
-        if exclude.IsSome then
-            logger.I $"排除：{exclude.Value}"
+    let add path (includeDir: string list) (exclude: string list) =
+        //if exclude.IsSome then
+        //    logger.I $"排除：{exclude.Value}"
         let fileList =
             Status.getChildItem path true
-            |> Seq.map Status.toFileSystemInfoDetail
-            |> Seq.map (fun x ->
-                { x with FullName = Path.relativePath path x.FullName})
+            //|> Seq.map Status.toFileSystemInfoDetail
+            //|> Seq.map (fun x ->
+            //    { x with FullName = Path.relativePath path x.FullName})
+            |> Seq.map (Status.toRelativePath path)
         let fileList =
-            match exclude with
-            | Some e ->
+            match exclude |> List.isEmpty with
+            | true ->
                 fileList
                 |> Seq.filter (fun x ->
-                    let startsWith i = x.Name |> String.startsWith i |> not
-                    List.forall startsWith e)
-            | None -> fileList
+                    let startsWith i = x.Path |> String.startsWith i
+                    List.forall startsWith includeDir)
+            | false -> fileList
+        let fileList =
+            match exclude |> List.isEmpty with
+            | true ->
+                fileList
+                |> Seq.filter (fun x ->
+                    let startsWith i = x.Path |> String.startsWith i |> not
+                    List.forall startsWith exclude)
+            | false -> fileList
         fileList
 
-    let compare (leftJson: Status.FileSystemInfoDetail seq)
-        (rightJson: Status.FileSystemInfoDetail seq) =
+    type ItemType = Status.RelativePath
+
+    let compare (leftJson: Status.RelativePath seq)
+        (rightJson: ItemType seq) =
 
         let diff : Map<string, Status.Difference> =
-            Status.compareObject leftJson rightJson (fun x -> x.FullName)
-            |> Map.filter (fun k v ->
+            Status.compareObject leftJson rightJson (fun x -> x.Path)
+            |> Map.filter (fun _ v ->
                 match v with
                 | Some le, Some ri ->
-                    if le.PSIsContainer && ri.PSIsContainer then
+                    if le.IsContainer && ri.IsContainer then
                         false
                     else
-                        (le.PSIsContainer <> ri.PSIsContainer)
-                        || (le.LastWriteTime <> ri.LastWriteTime)
-                        || (le.Length <> ri.Length)
+                        //(le.PSIsContainer <> ri.PSIsContainer)
+                        //|| (le.LastWriteTime <> ri.LastWriteTime)
+                        //|| (le.Length <> ri.Length)
+                        le <> ri
                 | _ -> true
             )
-            |> Map.map (fun k v ->
+            |> Map.map (fun _ v ->
                 match v with
                 | Some _, Some ri ->
-                    { Status.Difference.FullName = ri.FullName;
-                      Status.Difference.PSIsContainer = ri.PSIsContainer;
+                    { Status.Difference.Path = ri.Path;
+                      Status.Difference.IsContainer = ri.IsContainer;
                       Status.Difference.Operation = Status.Modification }
                 | Some le, None ->
-                    { FullName = le.FullName;
-                      PSIsContainer = le.PSIsContainer;
+                    { Path = le.Path;
+                      IsContainer = le.IsContainer;
                       Operation = Status.Deletion }
                 | None, Some ri ->
-                    { FullName = ri.FullName;
-                      PSIsContainer = ri.PSIsContainer;
+                    { Path = ri.Path;
+                      IsContainer = ri.IsContainer;
                       Operation = Status.Creation }
                 | _ -> failwith "fail"
             )
@@ -148,13 +90,25 @@ module Status =
             |> Map.values
         diff
 
-let add path destination (exclude: string list option) =
+module Check =
+    let dir path =
+        if Directory.exists path |> not then
+            failwith $"{path} not exists"
+
+    let file path =
+        if File.exists path |> not then
+            failwith $"{path} not exists"
+
+let init path destination name =
+    Config.init path destination name
+
+let add path (destination: string) (includeDir: string list) (exclude: string list) =
     if Directory.exists path |> not then
         failwith $"{path} not exists"
     logger.I $"path: {path} destination: {destination}"
-    let fileList = Status.add path exclude
+    let fileList = Status.add path includeDir exclude
     let text =
-        JsonSerializer.Serialize<Status.FileSystemInfoDetail seq>(fileList, options)
+        JsonSerializer.Serialize<Status.RelativePath seq>(fileList, Common.options)
     File.WriteAllText(destination, text, Encoding.UTF8)
 
 let compare left right destination =
@@ -169,12 +123,12 @@ let compare left right destination =
     let diff = Status.compare leftJson rightJson
     // 寫入文件
     let text =
-        JsonSerializer.Serialize<Status.Difference seq>(diff, options)
+        JsonSerializer.Serialize<Status.Difference seq>(diff, Common.options)
     File.WriteAllText(destination, text, Encoding.UTF8)
 
 let diffFrom path =
     let content = File.ReadAllText(path, Encoding.UTF8)
-    JsonSerializer.Deserialize<Status.Difference seq>(content, options)
+    JsonSerializer.Deserialize<Status.Difference seq>(content, Common.options)
 
 let export path difference destination =
     if Directory.exists path |> not then
@@ -190,14 +144,14 @@ let export path difference destination =
     let diff = diffFrom difference
     for i in diff do
         logger.I $"{i}"
-        let destFile = destination +/ "data" +/ i.FullName
+        let destFile = destination +/ "data" +/ i.Path
         let creationOrModification (i: Status.Difference) =
-            if i.PSIsContainer then
+            if i.IsContainer then
                 Directory.createDirectory destFile
             else
                 let dir = Path.GetDirectoryName destFile
                 Directory.createDirectory dir
-                File.Copy(path +/ i.FullName, destFile)
+                File.Copy(path +/ i.Path, destFile)
         match i.Operation with
         | Status.Operation.Creation ->
             creationOrModification i
@@ -205,15 +159,6 @@ let export path difference destination =
             creationOrModification i
         | Status.Operation.Deletion -> ()
     File.Copy(difference, destination +/ "diff.json")
-
-module Check =
-    let dir path =
-        if Directory.exists path |> not then
-            failwith $"{path} not exists"
-
-    let file path =
-        if File.exists path |> not then
-            failwith $"{path} not exists"
 
 let merge path destination =
     Check.dir path
@@ -224,15 +169,15 @@ let merge path destination =
     for i in diff do
         logger.I $"{i}"
         // 目標路徑
-        let destPath = destination +/ i.FullName
+        let destPath = destination +/ i.Path
         // 源路徑
-        let srcPath = path +/ "data" +/ i.FullName
+        let srcPath = path +/ "data" +/ i.Path
         let copyFile srcPath (destPath: string) =
             let dir = Path.GetDirectoryName destPath
             Directory.createDirectory dir
             File.Copy(srcPath, destPath)
         let creationOrModification (i: Status.Difference) =
-            if i.PSIsContainer then
+            if i.IsContainer then
                 Directory.createDirectory destPath
             else
                 copyFile srcPath destPath
@@ -242,9 +187,8 @@ let merge path destination =
             File.deleteIfExists destPath
             creationOrModification i
         | Status.Operation.Modification ->
-            //creationOrModification i
             let destIsDir = Directory.exists destPath
-            match i.PSIsContainer, destIsDir with
+            match i.IsContainer, destIsDir with
             | true, false ->
                 File.delete destPath
                 Directory.createDirectory destPath
@@ -257,7 +201,7 @@ let merge path destination =
             | _ -> failwith $"can not"
         | Status.Operation.Deletion ->
             let destIsDir = Directory.exists destPath
-            match i.PSIsContainer, destIsDir with
+            match i.IsContainer, destIsDir with
             | true, true ->
                 Directory.delete destPath true
             | false, false ->
@@ -269,8 +213,7 @@ let test path destination =
         failwith $"{path} must exists"
 
     let copyDirectory p d =
-        if Directory.exists d then
-            Directory.Delete(d, true)
+        Directory.deleteIfExists d true
         Directory.copyDirectory p d
 
     let src = destination +/ "src"
@@ -308,7 +251,7 @@ let test path destination =
     File.deleteIfExists status1
     File.deleteIfExists status2
 
-    add src status1 None
+    add src status1 [] []
 
     // 添加文件
     writeAllText <| src +/ "add.txt" <| "add"
@@ -316,7 +259,7 @@ let test path destination =
 
     // 添加目錄
     Directory.createDirectory <| src +/ "add"
-    Directory.createDirectory <| Path.Join(src, "Tutorial", "add")
+    Directory.createDirectory <| src +/ "Tutorial" +/ "add"
 
     // 修改文件
     writeAllText <| src +/ "CMakeLists.txt" <| "update"
@@ -329,7 +272,7 @@ let test path destination =
     Directory.deleteIfExists deleteDir true
     Directory.deleteIfExists deleteDir2 true
 
-    add src status2 None
+    add src status2 [] []
 
     let diff =  destination +/ "diff.json"
     File.deleteIfExists diff
@@ -343,13 +286,13 @@ let test path destination =
     merge <| destination +/ "diff" <| dest
 
     // 測試結果
-    let srcStatus = Status.add src None
-    let destStatus = Status.add dest None
+    let srcStatus = Status.add src [] []
+    let destStatus = Status.add dest [] []
     let diff = Status.compare srcStatus destStatus
     logger.D $"diff: %A{diff}"
     let mapTests =
         Expecto.Tests.test "map test" {
-            Expect.equal (diff |> Seq.isEmpty) true ""
+            Expect.equal (Seq.isEmpty diff) true ""
         }
     runTestsWithCLIArgs [] Array.empty mapTests
     |> ignore

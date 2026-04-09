@@ -17,14 +17,38 @@ module Status =
         Attributes: FileAttributes
     }
 
+    type RelativePath = {
+        Path: string
+        IsContainer: bool
+        Length: int64
+        LastWriteTime: System.DateTime
+    }
+
+    let toRelativePath path item =
+        match item with
+        | FileItem fileInfo ->
+            {
+                Path = Path.GetRelativePath(path, fileInfo.FullName )
+                IsContainer = false
+                Length = fileInfo.Length
+                LastWriteTime = fileInfo.LastWriteTime
+            }
+        | DirItem dirInfo ->
+            {
+                Path = Path.GetRelativePath(path, dirInfo.FullName )
+                IsContainer = true
+                Length = 0L  // 目录没有长度
+                LastWriteTime = dirInfo.LastWriteTime
+            }
+
     type Operation =
     | Creation
     | Modification
     | Deletion
 
     type Difference = {
-        FullName: string
-        PSIsContainer: bool
+        Path: string
+        IsContainer: bool
         Operation: Operation
     }
 

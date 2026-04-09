@@ -6,6 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Common.fs" />
+    <Compile Include="Config.fs" />
     <Compile Include="DirStatus.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
