@@ -53,9 +53,9 @@ module Directory =
         else
             failwithf "源目录不存在: %s" sourceDir
 
-module String =
-    let startsWith (sub: string) (str: string) =
-        str.StartsWith(sub)
+//module String =
+//    let startsWith (sub: string) (str: string) =
+//        str.StartsWith(sub)
 
 module Path =
     let relativePath relativeTo path =
@@ -80,3 +80,9 @@ module File =
     let deleteIfExists p =
         if exists p then
             delete p
+
+    let copyFrom src overwrite dest =
+        File.Copy(src, dest, overwrite)
+
+    let copyTo dest overwrite src =
+        File.Copy(src, dest, overwrite)

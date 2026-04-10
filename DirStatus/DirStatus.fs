@@ -8,6 +8,7 @@ open System.Text.Json
 open System.Text.Json.Serialization
 open Expecto
 open Common
+open FSharpPlus
 
 //let options =
 //    JsonFSharpOptions.Default()
@@ -33,21 +34,21 @@ module Status =
             //    { x with FullName = Path.relativePath path x.FullName})
             |> Seq.map (Status.toRelativePath path)
         let fileList =
-            match exclude |> List.isEmpty with
-            | true ->
+            match includeDir |> List.isEmpty with
+            | true -> fileList
+            | false ->
                 fileList
                 |> Seq.filter (fun x ->
                     let startsWith i = x.Path |> String.startsWith i
                     List.forall startsWith includeDir)
-            | false -> fileList
         let fileList =
             match exclude |> List.isEmpty with
-            | true ->
+            | true -> fileList
+            | false ->
                 fileList
                 |> Seq.filter (fun x ->
                     let startsWith i = x.Path |> String.startsWith i |> not
                     List.forall startsWith exclude)
-            | false -> fileList
         fileList
 
     type ItemType = Status.RelativePath
@@ -102,10 +103,16 @@ module Check =
 let init path destination name =
     Config.init path destination name
 
+let appendJson p =
+    match p |> String.endsWith ".json" with
+    | true -> p
+    | false -> p ++ ".json"
+
 let add path (destination: string) (includeDir: string list) (exclude: string list) =
     if Directory.exists path |> not then
         failwith $"{path} not exists"
     logger.I $"path: {path} destination: {destination}"
+    let destination = appendJson destination
     let fileList = Status.add path includeDir exclude
     let text =
         JsonSerializer.Serialize<Status.RelativePath seq>(fileList, Common.options)
@@ -113,6 +120,8 @@ let add path (destination: string) (includeDir: string list) (exclude: string li
 
 let compare left right destination =
     printfn $"left: {left} right: {right} destination: {destination}"
+    let left = appendJson left
+    let right = appendJson right
     if File.exists left |> not then
         failwith $"{left} not exists"
     if File.exists right |> not then
@@ -120,10 +129,14 @@ let compare left right destination =
     let leftJson = fromPath left
     let rightJson = fromPath right
 
+    let destination = appendJson destination
+
     let diff = Status.compare leftJson rightJson
+    logger.D $"diff: %A{diff}"
     // 寫入文件
     let text =
         JsonSerializer.Serialize<Status.Difference seq>(diff, Common.options)
+    logger.D $"destination: {destination}"
     File.WriteAllText(destination, text, Encoding.UTF8)
 
 let diffFrom path =
@@ -131,34 +144,37 @@ let diffFrom path =
     JsonSerializer.Deserialize<Status.Difference seq>(content, Common.options)
 
 let export path difference destination =
+    let difference = appendJson difference
+    logger.D $"path: {path}"
+    logger.D $"difference: {difference}"
+    logger.D $"destination: {destination}"
     if Directory.exists path |> not then
         failwith $"{path} not exists"
     if File.exists difference |> not then
         failwith $"{difference} not exists"
     //printfn $"path: {path} difference: {difference} destination: {destination}"
-    logger.D $"path: {path}"
-    logger.D $"difference: {difference}"
-    logger.D $"destination: {destination}"
     Directory.deleteIfExists destination true
     Directory.createDirectory destination
     let diff = diffFrom difference
     for i in diff do
         logger.I $"{i}"
         let destFile = destination +/ "data" +/ i.Path
-        let creationOrModification (i: Status.Difference) =
+        let createItem (i: Status.Difference) =
             if i.IsContainer then
                 Directory.createDirectory destFile
             else
                 let dir = Path.GetDirectoryName destFile
                 Directory.createDirectory dir
-                File.Copy(path +/ i.Path, destFile)
+                //File.Copy(path +/ i.Path, destFile)
+                File.copyTo destFile true <| path +/ i.Path
         match i.Operation with
         | Status.Operation.Creation ->
-            creationOrModification i
+            createItem i
         | Status.Operation.Modification ->
-            creationOrModification i
+            createItem i
         | Status.Operation.Deletion -> ()
-    File.Copy(difference, destination +/ "diff.json")
+    //File.Copy(difference, destination +/ "diff.json")
+    File.copyTo <| destination +/ "diff.json" <| true <| difference
 
 let merge path destination =
     Check.dir path
@@ -208,7 +224,10 @@ let merge path destination =
                 File.delete destPath
             | _ -> failwith $"can not"
 
-let test path destination =
+let writeAllText (path: string) (contents: string) =
+    File.WriteAllText(path, contents)
+
+let testPrepare path destination =
     if Directory.exists path |> not then
         failwith $"{path} must exists"
 
@@ -226,9 +245,6 @@ let test path destination =
 
     let deleteFile = src +/ "delete.txt"
     let deleteFile2 = src +/ "Tutorial" +/ "delete.txt"
-
-    let writeAllText (path: string) (contents: string) =
-        File.WriteAllText(path, contents)
 
     // 先添加文件
     writeAllText deleteFile "delete"
@@ -251,7 +267,27 @@ let test path destination =
     File.deleteIfExists status1
     File.deleteIfExists status2
 
-    add src status1 [] []
+let equal src dest =
+    let srcStatus = Status.add src [] []
+    let destStatus = Status.add dest [] []
+    let diff = Status.compare srcStatus destStatus
+    logger.D $"diff: %A{diff}"
+    let mapTests =
+        Expecto.Tests.test "map test" {
+            Expect.equal (Seq.isEmpty diff) true ""
+        }
+    runTestsWithCLIArgs [] Array.empty mapTests
+    |> ignore
+
+let testUpdate path destination =
+    let src = destination +/ "src"
+    //let dest = destination +/ "dest"
+
+    let deleteFile = src +/ "delete.txt"
+    let deleteFile2 = src +/ "Tutorial" +/ "delete.txt"
+
+    let deleteDir = src +/ "delete"
+    let deleteDir2 = src +/ "Tutorial" +/ "delete"
 
     // 添加文件
     writeAllText <| src +/ "add.txt" <| "add"
@@ -272,27 +308,40 @@ let test path destination =
     Directory.deleteIfExists deleteDir true
     Directory.deleteIfExists deleteDir2 true
 
+let test path destination =
+    if Directory.exists path |> not then
+        failwith $"{path} must exists"
+
+    let src = destination +/ "src"
+    let dest = destination +/ "dest"
+
+    let statusBase = destination +/ "DirStatus" +/ "Step1" +/ "status"
+    let status1 = statusBase +/ "1.json"
+    let status2 = statusBase +/ "2.json"
+
+    // 準備測試數據
+    testPrepare path destination
+
+    add src status1 [] []
+
+    // 更新測試數據
+    testUpdate path destination
+
     add src status2 [] []
 
-    let diff =  destination +/ "diff.json"
+    let diff = destination +/ "DirStatus" +/ "Step1" +/ "diff" +/ "diff.json"
     File.deleteIfExists diff
 
     compare status1 status2 diff
 
+    //let exportPath = destination +/ "export" "diff"
+    let exportPath =  destination +/ "DirStatus" +/ "Step1" +/ "export"
+
     // 導出變更包
-    export src diff <| destination +/ "diff"
+    export src diff exportPath
 
     // 合併
-    merge <| destination +/ "diff" <| dest
+    merge exportPath dest
 
     // 測試結果
-    let srcStatus = Status.add src [] []
-    let destStatus = Status.add dest [] []
-    let diff = Status.compare srcStatus destStatus
-    logger.D $"diff: %A{diff}"
-    let mapTests =
-        Expecto.Tests.test "map test" {
-            Expect.equal (Seq.isEmpty diff) true ""
-        }
-    runTestsWithCLIArgs [] Array.empty mapTests
-    |> ignore
+    equal src dest

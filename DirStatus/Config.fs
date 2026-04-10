@@ -58,15 +58,21 @@ let init path destination name =
     match name with
     | Some n ->
         let c: Config = {
-            //Path = Option.defaultValue "" path
             Path = path
-            //Destination = Option.defaultValue "" destination
             Destination = destination
             Include = []
             Exclude = []
         }
         let config = readConfig configFile
-        let config =
-            config |> Map.add n c
-        writeConfig config
+        match tryGet n with
+        | Some _ ->
+            let config =
+                config
+                |> Map.remove n
+                |> Map.add n c
+            writeConfig config
+        | None ->
+            let config =
+                config |> Map.add n c
+            writeConfig config
     | None -> ()
