@@ -2,6 +2,7 @@
 open System.Text.Json
 open System.Text.Json.Serialization
 open System.IO
+open FSLogger
 
 let options =
     JsonFSharpOptions.Default()
@@ -9,6 +10,8 @@ let options =
 
 // 启用格式化（带缩进）
 options.WriteIndented <- true
+
+let logger = Logger.ColorConsole
 
 let inline (+/) (path1: string) path2 =
     Path.Join(path1, path2)

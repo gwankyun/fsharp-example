@@ -92,6 +92,47 @@ module Status =
                         yield! getChildItem dir recurse
         }
 
+    /// 递归获取目录中的所有文件系统项
+    let rec getChildItemIf (path: string) (recurse: bool) (pred: string -> bool) =
+        seq {
+            // 检查路径是否存在
+            if not (Directory.exists path || File.exists path) then
+                yield! Seq.empty
+            else if File.exists path then
+                // 如果是文件，直接返回
+                yield FileItem <| FileInfo path
+            else
+                // // 先添加当前目录本身
+                // yield DirItem <| DirectoryInfo path 
+
+                // // 获取当前目录中的所有文件
+                // for file in Directory.getFiles path do
+                //     yield FileItem <| FileInfo file
+                
+                // // 获取当前目录中的所有子目录
+                // for dir in Directory.getDirectories path do
+                //     //yield DirItem <| DirectoryInfo dir
+                    
+                //     // 如果需要递归，继续处理子目录
+                //     if recurse then
+                //         yield! getChildItem dir recurse
+                // 只有当目录满足过滤条件时，才获取目录本身及其内容
+                if pred path then
+                    // 添加当前目录本身
+                    yield DirItem <| DirectoryInfo path 
+
+                    // 获取当前目录中的所有文件
+                    for file in Directory.getFiles path do
+                        if pred file then
+                            yield FileItem <| FileInfo file
+                    
+                    // 获取当前目录中的所有子目录
+                    for dir in Directory.getDirectories path do
+                        // 如果需要递归，继续处理子目录
+                        if recurse then
+                            yield! getChildItemIf dir recurse pred
+        }
+
     /// 将 FileSystemItem 转换为详细信息
     let toFileSystemInfoDetail item =
         match item with

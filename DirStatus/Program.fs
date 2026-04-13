@@ -217,6 +217,7 @@ module Parse =
 
 [<EntryPoint>]
 let main argv =
+    logger.I "begin"
     try
         let parser = ArgumentParser.Create<MainArgs>(programName = "myapp")
         let results = parser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
@@ -261,6 +262,7 @@ let main argv =
             printfn "版本 1.0.0"
         | _ ->
             printfn "请指定有效的命令。"
+        logger.I "end"
         0
     with :? ArguParseException as e ->
         eprintfn "%s" e.Message

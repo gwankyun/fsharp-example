@@ -2,7 +2,7 @@
 open System.IO
 open Status
 open Serilog
-open FSLogger
+//open FSLogger
 open System.Text
 open System.Text.Json
 open System.Text.Json.Serialization
@@ -17,7 +17,7 @@ open FSharpPlus
 //// 启用格式化（带缩进）
 //options.WriteIndented <- true
 
-let logger = Logger.ColorConsole
+//let logger = Logger.ColorConsole
 
 let fromPath path =
     let content = File.ReadAllText(path, Encoding.UTF8)
@@ -28,27 +28,45 @@ module Status =
         //if exclude.IsSome then
         //    logger.I $"排除：{exclude.Value}"
         let fileList =
-            Status.getChildItem path true
+            Status.getChildItemIf path true (fun x ->
+                let rela = Path.relativePath path x
+                //logger.D $"rela: %s{rela}"
+                //true
+                //let inc = List.forall (fun i -> String.startsWith i rela) includeDir
+                //let inc = List.contains rela includeDir
+                let inc =
+                    match includeDir |> List.isEmpty with
+                    | true -> true
+                    | false -> List.contains rela includeDir
+                //let exc = List.forall (fun i -> not <| String.startsWith i rela) exclude
+                //let exc = not <| List.contains rela exclude
+                let exc =
+                    match exclude |> List.isEmpty with
+                    | true -> true
+                    | false -> not <| List.contains rela exclude
+                inc && exc
+                )
+            //true
             //|> Seq.map Status.toFileSystemInfoDetail
             //|> Seq.map (fun x ->
             //    { x with FullName = Path.relativePath path x.FullName})
             |> Seq.map (Status.toRelativePath path)
-        let fileList =
-            match includeDir |> List.isEmpty with
-            | true -> fileList
-            | false ->
-                fileList
-                |> Seq.filter (fun x ->
-                    let startsWith i = x.Path |> String.startsWith i
-                    List.forall startsWith includeDir)
-        let fileList =
-            match exclude |> List.isEmpty with
-            | true -> fileList
-            | false ->
-                fileList
-                |> Seq.filter (fun x ->
-                    let startsWith i = x.Path |> String.startsWith i |> not
-                    List.forall startsWith exclude)
+        //let fileList =
+        //    match includeDir |> List.isEmpty with
+        //    | true -> fileList
+        //    | false ->
+        //        fileList
+        //        |> Seq.filter (fun x ->
+        //            let startsWith i = x.Path |> String.startsWith i
+        //            List.forall startsWith includeDir)
+        //let fileList =
+        //    match exclude |> List.isEmpty with
+        //    | true -> fileList
+        //    | false ->
+        //        fileList
+        //        |> Seq.filter (fun x ->
+        //            let startsWith i = x.Path |> String.startsWith i |> not
+        //            List.forall startsWith exclude)
         fileList
 
     type ItemType = Status.RelativePath
