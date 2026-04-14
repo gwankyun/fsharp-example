@@ -1,6 +1,19 @@
 <Solution>
   <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   <Project Path="DirStatus/DirStatus.fsproj" Id="a38d957c-be92-4c74-a8f1-e0d5e60fdefc" />
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="App1/App1.csproj" Id="69dcd8f1-6c72-4322-ab19-2b6dd41a5b73">
+    <Platform Solution="*|Any CPU" Project="x64" />
+    <Platform Solution="*|ARM64" Project="ARM64" />
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="*|x86" Project="x86" />
+    <Deploy />
+  </Project>
   <Project Path="diff/diff.fsproj" />
   <Project Path="dir-compare/dir-compare.fsproj" />
   <Project Path="exercise/exercise.fsproj" />
