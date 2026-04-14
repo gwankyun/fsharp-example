@@ -25,9 +25,10 @@ namespace WinUINotes.Views
     public sealed partial class AllNotesPage : Page
     {
         private AllNotes notesModel = new AllNotes();
+
         public AllNotesPage()
         {
-            InitializeComponent();
+            this.InitializeComponent();
         }
     }
 }

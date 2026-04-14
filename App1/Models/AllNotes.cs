@@ -1,21 +1,16 @@
-﻿using Microsoft.UI.Windowing;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Windows.Storage;
+using WinUINotes.Models;
 
 namespace WinUINotes.Models
 {
-    //internal class AllNotes
-    //{
-    //}
-
     public class AllNotes
     {
-        public ObservableCollection<Note> Notes { get; set; } = new ObservableCollection<Note>();
+        public ObservableCollection<Note> Notes { get; set; } =
+                                    new ObservableCollection<Note>();
 
         public AllNotes()
         {
@@ -25,24 +20,28 @@ namespace WinUINotes.Models
         public async void LoadNotes()
         {
             Notes.Clear();
-            StorageFolder storageFolder = ApplicationData.Current.LocalFolder;
+            // Get the folder where the notes are stored.
+            StorageFolder storageFolder =
+                          ApplicationData.Current.LocalFolder;
             await GetFilesInFolderAsync(storageFolder);
         }
 
         private async Task GetFilesInFolderAsync(StorageFolder folder)
         {
-            IReadOnlyList<IStorageItem> storageItems = await folder.GetItemsAsync();
-
+            // Each StorageItem can be either a folder or a file.
+            IReadOnlyList<IStorageItem> storageItems =
+                                        await folder.GetItemsAsync();
             foreach (IStorageItem item in storageItems)
             {
                 if (item.IsOfType(StorageItemTypes.Folder))
                 {
+                    // Recursively get items from subfolders.
                     await GetFilesInFolderAsync((StorageFolder)item);
                 }
                 else if (item.IsOfType(StorageItemTypes.File))
                 {
                     StorageFile file = (StorageFile)item;
-                    Note note = new Note
+                    Note note = new Note()
                     {
                         Filename = file.Name,
                         Text = await FileIO.ReadTextAsync(file),
