@@ -7,7 +7,7 @@ using Windows.Storage;
 
 namespace WinUINotes.Models
 {
-    internal class Note
+    public class Note
     {
         private StorageFolder storageFolder = ApplicationData.Current.LocalFolder;
         public string Filename { get; set; } = string.Empty;

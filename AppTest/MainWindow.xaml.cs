@@ -16,7 +16,7 @@ using Windows.Foundation.Collections;
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
 
-namespace WinUINotes
+namespace AppTest
 {
     /// <summary>
     /// An empty window that can be used on its own or navigated to within a Frame.
@@ -26,9 +26,19 @@ namespace WinUINotes
         public MainWindow()
         {
             InitializeComponent();
+        }
 
-            ExtendsContentIntoTitleBar = true;
-            SetTitleBar(AppTitleBar);
+        private async void Button_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = "Title",
+                Content = "Content",
+                CloseButtonText = "CloseButtonText",
+                PrimaryButtonText = "PrimaryButtonText",
+                SecondaryButtonText = "SecondaryButtonText"
+            };
+            var result = await dialog.ShowAsync();
         }
     }
 }

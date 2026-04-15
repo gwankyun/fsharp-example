@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using Windows.Storage;
-using WinUINotes.Models;
+//using WinUINotes.Models;
 
 namespace WinUINotes.Models
 {
