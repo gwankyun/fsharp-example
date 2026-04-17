@@ -239,8 +239,12 @@ let merge path destination =
             | true, true ->
                 Directory.delete destPath true
             | false, false ->
-                File.delete destPath
-            | _ -> failwith $"can not"
+                File.deleteIfExists destPath
+            | _, true ->
+                Directory.delete destPath true
+            | _, false ->
+                File.deleteIfExists destPath
+            //| _ -> failwith $"can not"
 
 let writeAllText (path: string) (contents: string) =
     File.WriteAllText(path, contents)
