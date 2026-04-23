@@ -32,4 +32,5 @@
   <Project Path="Status/Status.fsproj" Id="0527f5a3-dbc7-4721-b077-adcc7d2bf2b3" />
   <Project Path="t2s/t2s.fsproj" />
   <Project Path="Test/Test.fsproj" Id="b431160f-0ac9-43ff-90b6-900590b2290f" />
+  <Project Path="WpfAppTest/WpfAppTest.csproj" Id="a74c0c77-95e3-46a9-aee1-620024c6d74a" />
 </Solution>
