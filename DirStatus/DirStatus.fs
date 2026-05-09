@@ -217,9 +217,13 @@ let merge path destination =
                 copyFile srcPath destPath
         match i.Operation with
         | Status.Operation.Creation ->
-            Directory.deleteIfExists destPath true
-            File.deleteIfExists destPath
-            creationOrModification i
+            try
+                Directory.deleteIfExists destPath true
+                File.deleteIfExists destPath
+                creationOrModification i
+            with
+            | :? System.UnauthorizedAccessException
+            | _ -> ()
         | Status.Operation.Modification ->
             let destIsDir = Directory.exists destPath
             match i.IsContainer, destIsDir with
@@ -227,24 +231,28 @@ let merge path destination =
                 File.delete destPath
                 Directory.createDirectory destPath
             | false, false ->
-                File.delete destPath
-                copyFile srcPath destPath
+                try
+                    File.delete destPath
+                    copyFile srcPath destPath
+                with _ -> ()
             | false, true ->
                 Directory.delete destPath true
                 copyFile srcPath destPath
             | _ -> failwith $"can not"
         | Status.Operation.Deletion ->
             let destIsDir = Directory.exists destPath
-            match i.IsContainer, destIsDir with
-            | true, true ->
-                Directory.delete destPath true
-            | false, false ->
-                File.deleteIfExists destPath
-            | _, true ->
-                Directory.delete destPath true
-            | _, false ->
-                File.deleteIfExists destPath
-            //| _ -> failwith $"can not"
+            try
+                match i.IsContainer, destIsDir with
+                | true, true ->
+                        Directory.delete destPath true
+                | false, false ->
+                    File.deleteIfExists destPath
+                | _, true ->
+                    Directory.delete destPath true
+                | _, false ->
+                    File.deleteIfExists destPath
+                //| _ -> failwith $"can not"
+            with _ -> ()
 
 let writeAllText (path: string) (contents: string) =
     File.WriteAllText(path, contents)
