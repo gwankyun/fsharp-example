@@ -211,6 +211,15 @@ module Parse =
                 DirStatus.export c.Path diff dest
             | None ->
                 failwith $"未能找到{n}配置"
+        | Some n, _, None -> // 不指定-d就和--diff一樣
+            let config = Config.tryGet n
+            match config with
+            | Some c ->
+                let dest = c.Destination +/ "export" +/ diff
+                let diff = c.Destination +/ "diff" +/ diff
+                DirStatus.export c.Path diff dest
+            | None ->
+                failwith $"未能找到{n}配置"
         | None, Some p, Some d ->
             DirStatus.export p diff d
         | _ -> ()
