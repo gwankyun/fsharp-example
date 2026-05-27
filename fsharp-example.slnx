@@ -20,6 +20,7 @@
   <Project Path="fsharp-example.fsproj" />
   <Project Path="FuncUI/FuncUI.fsproj" Id="a65add93-10be-44ac-92c5-0725a601619a" />
   <Project Path="Library/Library.fsproj" />
+  <Project Path="mew-ui-cs/mew-ui-cs.csproj" Id="59b2bd26-8eee-4bc0-8de5-eb4f8f90ff48" />
   <Project Path="ParserCatalogJson/ParserCatalogJson.fsproj" Id="5afd0d7a-a145-4ff1-be97-ffe48211c6d4" />
   <Project Path="startup/startup.fsproj" />
   <Project Path="Status/Status.fsproj" Id="0527f5a3-dbc7-4721-b077-adcc7d2bf2b3" />
