@@ -13,6 +13,7 @@
     <Platform Solution="*|x86" Project="x86" />
     <Deploy />
   </Project>
+  <Project Path="ConsoleApp1/ConsoleApp1.csproj" Id="8e7aba5d-5de2-47d3-832a-b14ded8ecaa3" />
   <Project Path="diff/diff.fsproj" />
   <Project Path="dir-compare/dir-compare.fsproj" />
   <Project Path="DirStatus/DirStatus.fsproj" Id="a38d957c-be92-4c74-a8f1-e0d5e60fdefc" />
