@@ -11,7 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aprillz.MewUI.Windows" Version="0.15.2" />
+    <PackageReference Include="Aprillz.MewUI.Windows" Version="0.16.0" />
   </ItemGroup>
 
 </Project>
