@@ -10,6 +10,9 @@ type DestAttribute() =
 type NameAttribute() =
     inherit AltCommandLineAttribute([|"-n"|])
 
+type SnapshotAttribute() =
+    inherit AltCommandLineAttribute([|"-s"|])
+
 type NoPrefixAttribute() =
     inherit CliPrefixAttribute(CliPrefix.None)
 
@@ -37,6 +40,7 @@ type AddArgs =
     | [<Name>] Name of name: string
     | Include of includeDir: string list
     | Exclude of exclude: string list
+    | Previous of previous: string
 
     interface IArgParserTemplate with
         member this.Usage =
@@ -46,6 +50,7 @@ type AddArgs =
             | Include _ -> "包含目錄。"
             | Exclude _ -> "排除目錄。"
             | Name _ -> ArgText.name
+            | Previous _ -> "上一份清單（快取），用於 stat 快路徑複用哈希。"
 
 type CompareArgs =
     | Left of left: string
@@ -66,6 +71,7 @@ type ExportArgs =
     | [<AltCommandLine("--diff")>] Difference of difference: string
     | [<Dest>] Destination of destination: string
     | [<Name>] Name of name: string
+    | [<Snapshot>] Snapshot of snapshot: string
 
     interface IArgParserTemplate with
         member this.Usage =
@@ -74,6 +80,23 @@ type ExportArgs =
             | Difference _ -> "差異文件。"
             | Destination _ -> ArgText.dest
             | Name _ -> ArgText.name
+            | Snapshot _ -> "來源清單，會一併放進變更包供合併端收口驗證。"
+
+type VerifyArgs =
+    | [<Path>] Path of path: string
+    | [<Name>] Name of name: string
+    | [<Snapshot>] Snapshot of snapshot: string
+    | Include of includeDir: string list
+    | Exclude of exclude: string list
+
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Path _ -> ArgText.path
+            | Name _ -> ArgText.name
+            | Snapshot _ -> "期望的清單（來源快照）。"
+            | Include _ -> "包含目錄。"
+            | Exclude _ -> "排除目錄。"
 
 type MergeArgs =
     | [<Path>] Path of path: string
@@ -131,6 +154,7 @@ type MainArgs =
     | [<NoPrefix>] Compare of ParseResults<CompareArgs>
     | [<NoPrefix>] Export of ParseResults<ExportArgs>
     | [<NoPrefix>] Merge of ParseResults<MergeArgs>
+    | [<NoPrefix>] Verify of ParseResults<VerifyArgs>
     | [<NoPrefix>] Test of ParseResults<TestArgs>
     | [<NoPrefix>] TestPrepare of ParseResults<TestPrepareArgs>
     | [<NoPrefix>] TestUpdate of ParseResults<TestUpdateArgs>
@@ -145,6 +169,7 @@ type MainArgs =
             | Compare _ -> "對比兩個狀態。"
             | Export _ -> "導出變更包。"
             | Merge _ -> "合併變更包。"
+            | Verify _ -> "核對目錄是否與給定清單一致。"
             | Version -> "顯示版本信息。"
             | Test _ -> $"測試{ArgText.test}"
             | TestPrepare _ -> $"生成測試數據{ArgText.test}"
@@ -153,10 +178,11 @@ type MainArgs =
             | Init _ -> "初始化配置。"
 
 module Parse =
-   let add (results: ParseResults<AddArgs>) = 
+   let add (results: ParseResults<AddArgs>) =
         let name = results.TryGetResult(AddArgs.Name)
         let path = results.TryGetResult(AddArgs.Path)
         let dest = results.TryGetResult(AddArgs.Destination)
+        let previous = results.TryGetResult(AddArgs.Previous)
         let includeDir =
             results.TryGetResult(AddArgs.Include)
             |> Option.defaultValue []
@@ -169,11 +195,11 @@ module Parse =
             match config with
             | Some c ->
                 let dest = c.Destination +/ "status" +/ d
-                DirStatus.add c.Path dest c.Include c.Exclude
+                DirStatus.add c.Path dest c.Include c.Exclude previous
             | None ->
                 failwith $"未能找到{n}配置"
         | _, Some p, Some d ->
-            DirStatus.add p d includeDir exclude
+            DirStatus.add p d includeDir exclude previous
         | _ -> failwith "參數錯誤"
 
    let compare (results: ParseResults<CompareArgs>) = 
@@ -196,11 +222,12 @@ module Parse =
             DirStatus.compare le ri d
         | _ -> ()
 
-   let export (results: ParseResults<ExportArgs>) = 
+   let export (results: ParseResults<ExportArgs>) =
         let name = results.TryGetResult(ExportArgs.Name)
         let path = results.TryGetResult(ExportArgs.Path)
         let dest = results.TryGetResult(ExportArgs.Destination)
         let diff = results.GetResult(ExportArgs.Difference)
+        let snapshot = results.TryGetResult(ExportArgs.Snapshot)
         match name, path, dest with
         | Some n, _, Some d ->
             let config = Config.tryGet n
@@ -208,7 +235,7 @@ module Parse =
             | Some c ->
                 let diff = c.Destination +/ "diff" +/ diff
                 let dest = c.Destination +/ "export" +/ d
-                DirStatus.export c.Path diff dest
+                DirStatus.export c.Path diff dest snapshot
             | None ->
                 failwith $"未能找到{n}配置"
         | Some n, _, None -> // 不指定-d就和--diff一樣
@@ -217,12 +244,31 @@ module Parse =
             | Some c ->
                 let dest = c.Destination +/ "export" +/ diff
                 let diff = c.Destination +/ "diff" +/ diff
-                DirStatus.export c.Path diff dest
+                DirStatus.export c.Path diff dest snapshot
             | None ->
                 failwith $"未能找到{n}配置"
         | None, Some p, Some d ->
-            DirStatus.export p diff d
-        | _ -> ()
+            DirStatus.export p diff d snapshot
+        | _ -> []
+
+   let verify (results: ParseResults<VerifyArgs>) =
+        let name = results.TryGetResult(VerifyArgs.Name)
+        let path = results.TryGetResult(VerifyArgs.Path)
+        let snapshot = results.TryGetResult(VerifyArgs.Snapshot)
+        let includeDir =
+            results.TryGetResult(VerifyArgs.Include)
+            |> Option.defaultValue []
+        let exclude =
+            results.TryGetResult(VerifyArgs.Exclude)
+            |> Option.defaultValue []
+        match name, path, snapshot with
+        | Some n, _, Some s ->
+            match Config.tryGet n with
+            | Some c -> DirStatus.verify c.Path s c.Include c.Exclude
+            | None -> failwith $"未能找到{n}配置"
+        | None, Some p, Some s ->
+            DirStatus.verify p s includeDir exclude
+        | _ -> failwith "參數錯誤"
 
 [<EntryPoint>]
 let main argv =
@@ -231,48 +277,78 @@ let main argv =
         let parser = ArgumentParser.Create<MainArgs>(programName = "myapp")
         let results = parser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
 
-        match results.GetAllResults() with
-        | [Init results] ->
-            let path =
-                results.TryGetResult(InitArgs.Path)
-                |> Option.defaultValue ""
-            let dest =
-                results.TryGetResult(InitArgs.Destination)
-                |> Option.defaultValue ""
-            let name = results.TryGetResult(InitArgs.Name)
-            DirStatus.init path dest name
-        | [Add results] ->
-            Parse.add results
-        | [Compare results] ->
-            Parse.compare results
-        | [Export results] ->
-            Parse.export results
-        | [Merge results] ->
-            let path = results.GetResult(MergeArgs.Path)
-            let dest = results.GetResult(MergeArgs.Destination)
-            DirStatus.merge path dest
-        | [Test results] ->
-            let path = results.GetResult(TestArgs.Path)
-            let dest = results.GetResult(TestArgs.Destination)
-            DirStatus.test path dest
-        | [Equal results] ->
-            let path = results.GetResult(EqualArgs.Left)
-            let dest = results.GetResult(EqualArgs.Right)
-            DirStatus.equal path dest
-        | [TestPrepare results] ->
-            let path = results.GetResult(TestPrepareArgs.Path)
-            let dest = results.GetResult(TestPrepareArgs.Destination)
-            DirStatus.testPrepare path dest
-        | [TestUpdate results] ->
-            let path = results.GetResult(TestUpdateArgs.Path)
-            let dest = results.GetResult(TestUpdateArgs.Destination)
-            DirStatus.testUpdate path dest
-        | [Version] ->
-            printfn "版本 1.0.0"
-        | _ ->
-            printfn "请指定有效的命令。"
+        let exitCode =
+            match results.GetAllResults() with
+            | [Init results] ->
+                let path =
+                    results.TryGetResult(InitArgs.Path)
+                    |> Option.defaultValue ""
+                let dest =
+                    results.TryGetResult(InitArgs.Destination)
+                    |> Option.defaultValue ""
+                let name = results.TryGetResult(InitArgs.Name)
+                DirStatus.init path dest name
+                0
+            | [Add results] ->
+                Parse.add results
+                0
+            | [Compare results] ->
+                Parse.compare results
+                0
+            | [Export results] ->
+                let failed = Parse.export results
+                if List.isEmpty failed then
+                    0
+                else
+                    eprintfn "導出結束：%d 項校驗失敗（見上方日誌）" failed.Length
+                    1
+            | [Verify results] ->
+                let failed = Parse.verify results
+                if List.isEmpty failed then
+                    printfn "核對通過。"
+                    0
+                else
+                    for f in failed do
+                        eprintfn "%s" f
+                    eprintfn "核對結束：%d 項不符。" failed.Length
+                    1
+            | [Merge results] ->
+                let path = results.GetResult(MergeArgs.Path)
+                let dest = results.GetResult(MergeArgs.Destination)
+                let failed = DirStatus.merge path dest
+                if List.isEmpty failed then
+                    0
+                else
+                    eprintfn "合併結束：%d 項失敗（見上方日誌）" failed.Length
+                    1
+            | [Test results] ->
+                let path = results.GetResult(TestArgs.Path)
+                let dest = results.GetResult(TestArgs.Destination)
+                DirStatus.test path dest
+                0
+            | [Equal results] ->
+                let path = results.GetResult(EqualArgs.Left)
+                let dest = results.GetResult(EqualArgs.Right)
+                DirStatus.equal path dest
+                0
+            | [TestPrepare results] ->
+                let path = results.GetResult(TestPrepareArgs.Path)
+                let dest = results.GetResult(TestPrepareArgs.Destination)
+                DirStatus.testPrepare path dest
+                0
+            | [TestUpdate results] ->
+                let path = results.GetResult(TestUpdateArgs.Path)
+                let dest = results.GetResult(TestUpdateArgs.Destination)
+                DirStatus.testUpdate path dest
+                0
+            | [Version] ->
+                printfn "版本 1.0.0"
+                0
+            | _ ->
+                printfn "请指定有效的命令。"
+                1
         logger.I "end"
-        0
+        exitCode
     with :? ArguParseException as e ->
         eprintfn "%s" e.Message
         1

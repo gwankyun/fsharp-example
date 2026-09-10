@@ -1,5 +1,7 @@
 ﻿// For more information see https://aka.ms/fsharp-console-apps
 open System.IO
+open System.Text
+open System.Text.RegularExpressions
 
 //printfn "Hello from F#"
 
@@ -31,6 +33,9 @@ module Directory =
 module File =
     let exists path =
         File.Exists(path)
+
+    let readAllLinesEncoding encoding path =
+        File.ReadAllLines(path, encoding)
 
 /// 递归获取目录中的所有文件系统项
 let rec getChildItem (path: string) (recurse: bool) =
@@ -101,5 +106,23 @@ let compareObject<'a, 'b when 'b : comparison>
             // 键不存在，添加新条目
             Map.add key (None, Some item) map
     ) leftMap
+
+// 改變參數順序
+let readAllLinesUTF8 = File.readAllLinesEncoding Encoding.UTF8
+let lines = readAllLinesUTF8 @"d:\p500.txt"
+
+for i in lines do
+    printfn $"lines: {i}"
+
+type IAdd<'T> =
+    abstract add: 'T -> 'T -> 'T
+
+type IFile =
+    abstract readAllLines: Encoding -> string -> string []
+
+// 對象表达式
+let OrginFile =
+    { new IFile with
+        member _.readAllLines e p = File.readAllLinesEncoding e p }
 
 exit 0
