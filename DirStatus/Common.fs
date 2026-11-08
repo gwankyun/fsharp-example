@@ -73,6 +73,9 @@ module Path =
     let join (path: string list) =
         List.reduce join2 path
 
+    let isPathFullyQualified (path: string) =
+        Path.IsPathFullyQualified(path)
+
 module File =
     let exists path =
         File.Exists(path)
@@ -89,3 +92,6 @@ module File =
 
     let copyTo dest overwrite src =
         File.Copy(src, dest, overwrite)
+
+    let setLastWriteTimeUtc (path: string) lastWriteTimeUtc =
+        File.SetLastWriteTimeUtc(path, lastWriteTimeUtc)

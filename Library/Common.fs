@@ -306,6 +306,16 @@ module Map =
             | Some value -> s |> Map.add t value
             | None -> s) Map.empty
 
+    let compareHelper (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+        let toSet x = x |> Map.keys |> Set.ofSeq
+        let keys1, keys2 = Tuple2.map toSet (table1, table2)
+        Set.union keys1 keys2
+        |> Set.toSeq
+        |> Seq.map (fun x ->
+            let tryFind = Map.tryFind x
+            let tuple = Tuple2.map tryFind (table1, table2)
+            x, tuple)
+
     // 對比
     let compare (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
         let toSet x = x |> Map.keys |> Set.ofSeq
@@ -346,6 +356,27 @@ module Map =
             | Some result -> s |> Map.add t result
             | None -> s
             ) Map.empty keys
+
+    /// <summary>差異分三組：只在 table1、兩邊都有、只在 table2。</summary>
+    /// <param name="table1"></param>
+    /// <param name="table2"></param>
+    /// <typeparam name="'k"></typeparam>
+    /// <typeparam name="'v"></typeparam>
+    /// <returns>left（只在 table1）、both（兩邊都有，值成對）、right（只在 table2）</returns>
+    let compareGroup (table1: Map<'k, 'v>) (table2: Map<'k, 'v>) =
+        // 一遍過，去向由 match 決定。不要再用 m[(bool, bool)] 反查：
+        // 分組鍵和取值分支分開寫，哪一組取錯了編譯器不會吭聲，只會在執行期炸。
+        compareHelper table1 table2
+        |> Seq.fold (fun (left, both, right) (k, (v1, v2)) ->
+            match v1, v2 with
+            | Some v1, Some v2 ->
+                // 兩邊都有：兩個值都留著，「有沒有改」留給調用方比較
+                left, Map.add k (v1, v2) both, right
+            | Some v1, None -> Map.add k v1 left, both, right
+            | None, Some v2 -> left, both, Map.add k v2 right
+            // 鍵取自兩張表的並集，兩邊都沒有不可能發生
+            | None, None -> left, both, right
+            ) (Map.empty, Map.empty, Map.empty)
 
 module Process =
     /// <summary>启动一个新的进程并执行指定的命令，同时捕获其标准输出。</summary>

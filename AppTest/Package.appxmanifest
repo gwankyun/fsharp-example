@@ -9,15 +9,15 @@
   IgnorableNamespaces="uap rescap systemai">
 
   <Identity
-    Name="484dcb86-70fa-4353-a9b3-8b3f7265af84"
-    Publisher="CN=liangjunquan"
+    Name="e1d6a57d-df06-46d9-a247-bd81c631499f"
+    Publisher="CN=ljqic"
     Version="1.0.0.0" />
 
-  <mp:PhoneIdentity PhoneProductId="484dcb86-70fa-4353-a9b3-8b3f7265af84" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="e1d6a57d-df06-46d9-a247-bd81c631499f" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>AppTest</DisplayName>
-    <PublisherDisplayName>liangjunquan</PublisherDisplayName>
+    <PublisherDisplayName>ljqic</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 

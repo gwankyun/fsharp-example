@@ -6,7 +6,7 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="AppTest/AppTest.csproj" Id="27f94c28-e23c-454c-b08c-4161daf23d4c">
+  <Project Path="AppTest/AppTest.csproj" Id="93d6587f-e16b-4c1c-a178-df6ac9cd2d93">
     <Platform Solution="*|Any CPU" Project="x64" />
     <Platform Solution="*|ARM64" Project="ARM64" />
     <Platform Solution="*|x64" Project="x64" />

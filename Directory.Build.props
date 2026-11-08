@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+    SDK 的 F# targets（Microsoft.FSharp.NetSdk.props）在預覽版 SDK 11.x、且專案沒有指定 LangVersion 時，
+    會自動把 LangVersion 設成 11。Ionide 7.31.1 內建的 FCS 只到 F# 10.1，不認識 langversion 11，
+    參數解析失敗後就會放棄整組編譯選項（退回 .NET Framework 4.5 的預設參考），
+    於是編輯器裡所有 BCL 與 NuGet 套件都變成 not defined。
+    這裡只針對 F# 專案明確指定語言版本，讓上述自動規則不觸發；編譯器仍是 .NET 11 的 fsc。
+    單一專案若需要更新的語言版本，在自己的 fsproj 裡設 LangVersion 即可覆蓋（專案屬性比這個檔案晚求值）。
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.fsproj'">
+    <LangVersion>10.0</LangVersion>
+  </PropertyGroup>
+
+</Project>
