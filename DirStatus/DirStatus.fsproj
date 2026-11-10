@@ -19,7 +19,7 @@
     <PackageReference Include="FSharpPlus" Version="1.9.1" />
     <PackageReference Include="FSLogger" Version="6.0.0" />
     <PackageReference Include="Serilog" Version="4.4.0" />
-    <PackageReference Include="System.IO.Hashing" Version="10.0.14" />
+    <PackageReference Include="System.IO.Hashing" Version="11.0.0" />
   </ItemGroup>
 
   <ItemGroup>
