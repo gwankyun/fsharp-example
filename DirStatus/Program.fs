@@ -1397,11 +1397,8 @@ module Parse =
             DirStatus.export p diff d
         | _ -> ()
 
-[<EntryPoint>]
-let main argv =
-    logger.I "begin"
-
-    let yinit (results: ParseResults<YInitArgs>) =
+module Cmd =
+    let init (results: ParseResults<YInitArgs>) =
         let name =
             results.GetResult(YInitArgs.Name, "")
         let path =
@@ -1412,14 +1409,14 @@ let main argv =
             results.GetResult(YInitArgs.ExcludePath, [])
         Parse.Test.X.init name path includePath excludePath
 
-    let yadd (results: ParseResults<YAddArgs>) =
+    let add (results: ParseResults<YAddArgs>) =
         let name =
             results.GetResult(YAddArgs.Name, "")
         let version =
             results.GetResult(YAddArgs.Version, "")
         Parse.Test.X.add name version
 
-    let ydiff (results: ParseResults<YDiffArgs>) =
+    let diff (results: ParseResults<YDiffArgs>) =
         let name =
             results.GetResult(YDiffArgs.Name, "")
         let left =
@@ -1430,7 +1427,7 @@ let main argv =
             results.GetResult(YDiffArgs.Destination, "")
         Parse.Test.X.diff name left right dest
 
-    let ymerge (results: ParseResults<YMergeArgs>) =
+    let merge (results: ParseResults<YMergeArgs>) =
         let diff =
             results.GetResult(YMergeArgs.Diff, "")
         let dest =
@@ -1445,7 +1442,7 @@ let main argv =
                 dest
         Parse.Test.X.merge diff dest
 
-    let yequal (results: ParseResults<YEqualArgs>) =
+    let equal (results: ParseResults<YEqualArgs>) =
         let left =
             results.GetResult(YEqualArgs.Left, "")
         let right =
@@ -1462,6 +1459,10 @@ let main argv =
             results.GetResult(YUpdateArgs.Path, "")
         Parse.Test.updateDir path |> ignore
 
+[<EntryPoint>]
+let main argv =
+    logger.I "begin"
+
     try
         let parser = ArgumentParser.Create<MainArgs>(programName = "myapp")
         let results = parser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
@@ -1477,17 +1478,17 @@ let main argv =
             let name = results.TryGetResult(InitArgs.Name)
             DirStatus.init path dest name
         | [YInit results] ->
-            yinit results
+            Cmd.init results
         | [YAdd results] ->
-            yadd results |> ignore
+            Cmd.add results |> ignore
         | [YDiff results] ->
-            ydiff results
+            Cmd.diff results
         | [YMerge results] ->
-            ymerge results
+            Cmd.merge results
         | [YEqual results] ->
-            yequal results
+            Cmd.equal results
         | [YUpdate results] ->
-            yupdate results
+            Cmd.yupdate results
         | [Add results] ->
             Parse.add results
         | [XAdd results] ->
