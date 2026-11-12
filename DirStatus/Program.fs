@@ -524,20 +524,20 @@ type MainArgs =
     | [<NoPrefix>] Compare of ParseResults<CompareArgs>
     | [<NoPrefix>] XCompare of ParseResults<XCompareArgs>
     | [<NoPrefix>] Export of ParseResults<ExportArgs>
-    | [<NoPrefix>] Merge of ParseResults<MergeArgs>
+    | [<NoPrefix>] ZMerge of ParseResults<MergeArgs>
     | [<NoPrefix>] XMerge of ParseResults<XMergeArgs>
     | [<NoPrefix>] Test of ParseResults<TestArgs>
     | [<NoPrefix>] XTest of ParseResults<XTestArgs>
     | [<NoPrefix>] TestPrepare of ParseResults<TestPrepareArgs>
     | [<NoPrefix>] TestUpdate of ParseResults<TestUpdateArgs>
-    | [<NoPrefix>] Equal of ParseResults<EqualArgs>
+    | [<NoPrefix>] ZEqual of ParseResults<EqualArgs>
     | [<NoPrefix>] ZInit of ParseResults<InitArgs>
     | [<NoPrefix>] Init of ParseResults<YInitArgs>
-    | [<NoPrefix>] YAdd of ParseResults<YAddArgs>
-    | [<NoPrefix>] YDiff of ParseResults<YDiffArgs>
-    | [<NoPrefix>] YMerge of ParseResults<YMergeArgs>
-    | [<NoPrefix>] YEqual of ParseResults<YEqualArgs>
-    | [<NoPrefix>] YUpdate of ParseResults<YUpdateArgs>
+    | [<NoPrefix>] Add of ParseResults<YAddArgs>
+    | [<NoPrefix>] Diff of ParseResults<YDiffArgs>
+    | [<NoPrefix>] Merge of ParseResults<YMergeArgs>
+    | [<NoPrefix>] Equal of ParseResults<YEqualArgs>
+    | [<NoPrefix>] Update of ParseResults<YUpdateArgs>
     | Version
 
     interface IArgParserTemplate with
@@ -548,21 +548,21 @@ type MainArgs =
             | Compare _ -> "對比兩個狀態。"
             | XCompare _ -> "對比兩個狀態。"
             | Export _ -> "導出變更包。"
-            | Merge _ -> "合併變更包。"
+            | ZMerge _ -> "合併變更包。"
             | XMerge _ -> "合併變更包。"
             | Version -> "顯示版本信息。"
             | Test _ -> $"測試{ArgText.test}"
             | XTest _ -> $"測試{ArgText.test}"
             | TestPrepare _ -> $"生成測試數據{ArgText.test}"
             | TestUpdate _ -> $"更新測試數據{ArgText.test}"
-            | Equal _ -> $"比較測試結果{ArgText.test}"
+            | ZEqual _ -> $"比較測試結果{ArgText.test}"
             | ZInit _ -> "初始化配置。"
             | Init _ -> "初始化配置"
-            | YAdd _ -> "添加狀態"
-            | YDiff _ -> "對比兩個狀態"
-            | YMerge _ -> "合併變更包"
-            | YEqual _ -> "對比目錄"
-            | YUpdate _ -> "更新目錄"
+            | Add _ -> "添加狀態"
+            | Diff _ -> "對比兩個狀態"
+            | Merge _ -> "合併變更包"
+            | Equal _ -> "對比目錄"
+            | Update _ -> "更新目錄"
 
 module Parse =
     let add (results: ParseResults<AddArgs>) =
@@ -1479,15 +1479,15 @@ let main argv =
             DirStatus.init path dest name
         | [Init results] ->
             Cmd.init results
-        | [YAdd results] ->
+        | [Add results] ->
             Cmd.add results |> ignore
-        | [YDiff results] ->
+        | [Diff results] ->
             Cmd.diff results
-        | [YMerge results] ->
+        | [Merge results] ->
             Cmd.merge results
-        | [YEqual results] ->
+        | [Equal results] ->
             Cmd.equal results
-        | [YUpdate results] ->
+        | [Update results] ->
             Cmd.yupdate results
         | [ZAdd results] ->
             Parse.add results
@@ -1501,7 +1501,7 @@ let main argv =
             Parse.xmerge results
         | [Export results] ->
             Parse.export results
-        | [Merge results] ->
+        | [ZMerge results] ->
             let path = results.GetResult(MergeArgs.Path)
             let dest = results.GetResult(MergeArgs.Destination)
             DirStatus.merge path dest
@@ -1513,7 +1513,7 @@ let main argv =
             //let path = results.GetResult(XTestArgs.Path)
             Parse.xtest results
             ()
-        | [Equal results] ->
+        | [ZEqual results] ->
             let path = results.GetResult(EqualArgs.Left)
             let dest = results.GetResult(EqualArgs.Right)
             DirStatus.equal path dest

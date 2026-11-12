@@ -32,27 +32,27 @@ Copy-Item -Recurse -Force "$Source\*" "$dir1\"
 Copy-Item -Recurse -Force "$dir1\*" "$dir2\"
 
 # 建配置 + 更新dir1前的快照（同 xtest，排除 Step15）
-Run @('yinit', '-n', $Name, '-p', $dir1, '--excludepath', $Exclude)
-Run @('yadd', '-n', $Name, '--version', '1')
+Run @('init', '-n', $Name, '-p', $dir1, '--excludepath', $Exclude)
+Run @('add', '-n', $Name, '--version', '1')
 
 # 更新dir1
-Run @('yupdate', '--path', $dir1)
-Run @('yadd', '-n', $Name, '--version', '2')
+Run @('update', '--path', $dir1)
+Run @('add', '-n', $Name, '--version', '2')
 
 # 對比dir1和dir2，生成變更包（左=舊、右=新）
-Run @('ydiff', '-n', $Name, '--left', '1', '--right', '2', '-d', $bundle)
+Run @('diff', '-n', $Name, '--left', '1', '--right', '2', '-d', $bundle)
 
 # dir2合併變更包
-Run @('ymerge', '--diff', $bundle, '-d', $dir2)
+Run @('merge', '--diff', $bundle, '-d', $dir2)
 
 # 過濾驗證：$Exclude 不在快照裡，dir2 不應有它
 if (Test-Path (Join-Path $dir2 $Exclude)) { throw "$Exclude 未被过滤，出现在 dir2 中" }
 
 # 對比dir1和dir2（$Exclude 不參與比對）
-$out = & $Exe yequal --left $dir1 --right $dir2 --excludepath $Exclude
+$out = & $Exe equal --left $dir1 --right $dir2 --excludepath $Exclude
 $out
 if ("$out" -match 'result:\s*True') {
     Write-Host "PASS"
 } else {
-    throw "yequal 结果不为 True"
+    throw "equal 结果不为 True"
 }
