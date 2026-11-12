@@ -519,7 +519,7 @@ type EqualArgs =
 
 // 主命令类型
 type MainArgs =
-    | [<NoPrefix>] Add of ParseResults<AddArgs>
+    | [<NoPrefix>] ZAdd of ParseResults<AddArgs>
     | [<NoPrefix>] XAdd of ParseResults<XAddArgs>
     | [<NoPrefix>] Compare of ParseResults<CompareArgs>
     | [<NoPrefix>] XCompare of ParseResults<XCompareArgs>
@@ -531,8 +531,8 @@ type MainArgs =
     | [<NoPrefix>] TestPrepare of ParseResults<TestPrepareArgs>
     | [<NoPrefix>] TestUpdate of ParseResults<TestUpdateArgs>
     | [<NoPrefix>] Equal of ParseResults<EqualArgs>
-    | [<NoPrefix>] Init of ParseResults<InitArgs>
-    | [<NoPrefix>] YInit of ParseResults<YInitArgs>
+    | [<NoPrefix>] ZInit of ParseResults<InitArgs>
+    | [<NoPrefix>] Init of ParseResults<YInitArgs>
     | [<NoPrefix>] YAdd of ParseResults<YAddArgs>
     | [<NoPrefix>] YDiff of ParseResults<YDiffArgs>
     | [<NoPrefix>] YMerge of ParseResults<YMergeArgs>
@@ -543,7 +543,7 @@ type MainArgs =
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | Add _ -> "添加狀態。"
+            | ZAdd _ -> "添加狀態。"
             | XAdd _ -> "添加狀態。"
             | Compare _ -> "對比兩個狀態。"
             | XCompare _ -> "對比兩個狀態。"
@@ -556,8 +556,8 @@ type MainArgs =
             | TestPrepare _ -> $"生成測試數據{ArgText.test}"
             | TestUpdate _ -> $"更新測試數據{ArgText.test}"
             | Equal _ -> $"比較測試結果{ArgText.test}"
-            | Init _ -> "初始化配置。"
-            | YInit _ -> "初始化配置"
+            | ZInit _ -> "初始化配置。"
+            | Init _ -> "初始化配置"
             | YAdd _ -> "添加狀態"
             | YDiff _ -> "對比兩個狀態"
             | YMerge _ -> "合併變更包"
@@ -1468,7 +1468,7 @@ let main argv =
         let results = parser.ParseCommandLine(inputs = argv, raiseOnUsage = true)
 
         match results.GetAllResults() with
-        | [Init results] ->
+        | [ZInit results] ->
             let path =
                 results.TryGetResult(InitArgs.Path)
                 |> Option.defaultValue ""
@@ -1477,7 +1477,7 @@ let main argv =
                 |> Option.defaultValue ""
             let name = results.TryGetResult(InitArgs.Name)
             DirStatus.init path dest name
-        | [YInit results] ->
+        | [Init results] ->
             Cmd.init results
         | [YAdd results] ->
             Cmd.add results |> ignore
@@ -1489,7 +1489,7 @@ let main argv =
             Cmd.equal results
         | [YUpdate results] ->
             Cmd.yupdate results
-        | [Add results] ->
+        | [ZAdd results] ->
             Parse.add results
         | [XAdd results] ->
             Parse.xadd results
