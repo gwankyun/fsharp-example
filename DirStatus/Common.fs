@@ -1,8 +1,8 @@
 ﻿module Common
-open System.Text.Json
 open System.Text.Json.Serialization
 open System.IO
 open FSLogger
+open System.Diagnostics
 
 let options =
     JsonFSharpOptions.Default()
@@ -95,3 +95,23 @@ module File =
 
     let setLastWriteTimeUtc (path: string) lastWriteTimeUtc =
         File.SetLastWriteTimeUtc(path, lastWriteTimeUtc)
+
+// AI生成：節流進度——總量 ≤50 逐項打；否則每秒最多一行（逐項打日誌在大目錄時會拖慢掃描），
+// 滿 2 秒後附帶 ETA。
+module Progress =
+    let over (total: int) (what: string) =
+        let sw = Stopwatch.StartNew()
+        let mutable last = 0L
+        let mutable i = 0
+        let perItem = total <= 50
+        fun (current: string) ->
+            i <- i + 1
+            let el = sw.ElapsedMilliseconds
+            if perItem || el - last >= 1000 then
+                let eta =
+                    if el >= 2000L then
+                        let remainMs = float el / float i * float (total - i)
+                        $"，預計剩餘 {remainMs / 1000.0:F0}s"
+                    else ""
+                logger.I $"{what}: {i}/{total}（{current}）{eta}"
+                last <- el

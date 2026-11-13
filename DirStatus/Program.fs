@@ -9,6 +9,7 @@ open System.Text.Json
 open System.Text
 open FSharpPlus
 open Expecto
+open Record
 
 type PathAttribute() =
     inherit AltCommandLineAttribute([|"-p"|])
@@ -30,262 +31,6 @@ module ArgText =
     let name = "指定配置名稱。"
     let dest = "輸出路徑"
     let test = "，僅內部使用"
-
-// AI生成：節流進度——總量 ≤50 逐項打；否則每秒最多一行（逐項打日誌在大目錄時會拖慢掃描），
-// 滿 2 秒後附帶 ETA。
-module Progress =
-    let over (total: int) (what: string) =
-        let sw = Stopwatch.StartNew()
-        let mutable last = 0L
-        let mutable i = 0
-        let perItem = total <= 50
-        fun (current: string) ->
-            i <- i + 1
-            let el = sw.ElapsedMilliseconds
-            if perItem || el - last >= 1000 then
-                let eta =
-                    if el >= 2000L then
-                        let remainMs = float el / float i * float (total - i)
-                        $"，預計剩餘 {remainMs / 1000.0:F0}s"
-                    else ""
-                logger.I $"{what}: {i}/{total}（{current}）{eta}"
-                last <- el
-
-module Record =
-    type FileEntry = {
-        Path: string
-        Size: int64
-        MTimeUtc: DateTime
-        Hash: string option
-    }
-
-    type Dir = {
-        PathEntry: string
-        // MTimeUtc: DateTime
-    }
-
-    type Entry =
-        | File of FileEntry
-        | Dir of Dir
-
-    module Entry =
-        let path e =
-            match e with
-            | Dir { PathEntry = path } -> path
-            | File { Path = path } -> path
-
-        let equal e1 e2 =
-            match e1, e2 with
-            | File f1, File f2 -> f1 = f2
-            | Dir d1, Dir d2 -> d1 = d2
-            | _ -> false
-
-        let isDir e =
-            match e with
-            | Dir _ -> true
-            | _ -> false
-
-        let isFile e =
-            match e with
-            | File _ -> true
-            | _ -> false
-
-    let jsonToMap p =
-        let text = File.ReadAllText(p, Encoding.UTF8)
-        JsonSerializer.Deserialize<Map<string, Entry>>(text, Common.options)
-
-    let relativePath root path =
-        Path.GetRelativePath(root, path)
-
-    let computeFileXxh128 (filePath: string) : string option =
-        try
-            use stream = File.OpenRead(filePath)
-            let xxh = XxHash128()
-            xxh.Append(stream)
-            let hashBytes = xxh.GetHashAndReset()
-            let hexStr = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant()
-            Some hexStr
-        with
-        | _ -> None
-
-    /// --exclude 只接受「相對於 --path 的目錄路徑」。
-    /// a、a\b 都收，a/b 也當成 a\b；結尾的斜線和開頭的 .\ 只是同一條路徑的另一種寫法，吸收掉。
-    /// 無法當成相對路徑解釋的（絕對路徑、磁碟代號、..、萬用字元）直接報錯，不要靜默失效。
-    let normalizeExclude (e: string) : string =
-        let sep = Path.DirectorySeparatorChar
-        let replaced = e.Replace('/', sep)
-        let stripped =
-            match replaced.StartsWith("." + string sep) with
-            | true -> replaced.Substring 2
-            | false -> replaced
-        let body = stripped.TrimEnd sep
-        let hint = $"請寫相對於 --path 的目錄路徑，例如 .git 或 a{sep}b"
-        if body = "" || body = "." then
-            failwith $"exclude 不能是空的或 \".\"：{e}（{hint}）"
-        elif Path.IsPathRooted body || body.Contains ":" then
-            failwith $"exclude 不接受絕對路徑或磁碟代號：{e}（{hint}）"
-        elif body.Split sep |> Array.exists ((=) "..") then
-            failwith $"exclude 不能用 \"..\"：{e}"
-        elif body.IndexOfAny [| '*'; '?'; '"' |] >= 0 then
-            failwith $"exclude 不支援萬用字元或引號：{e}"
-        else
-            body
-
-    /// --exclude 的清單 → scan 用的 keepDir，外加一個「掃完之後」的未命中報告。
-    /// 大小寫用 OrdinalIgnoreCase 跟 Windows 檔案系統一致；hit 必須用同一個 comparer，
-    /// 否則使用者寫 "SRC" 對上磁碟上的 "src" 會被誤報成未命中。
-    let excludeToKeepDir (excludeDir: string list) : (string -> bool) * (unit -> unit) =
-        let excluded =
-            HashSet<string>(excludeDir |> Seq.map normalizeExclude, StringComparer.OrdinalIgnoreCase)
-        let hit = HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        let keepDir (d: string) =
-            match excluded.Contains d with
-            | true ->
-                hit.Add d |> ignore
-                false
-            | false -> true
-        let report () =
-            for e in excluded do
-                if not <| hit.Contains e then
-                    logger.W $"exclude 本次列舉未命中任何目錄：{e}"
-        keepDir, report
-
-    // AI生成：改為「先收集再處理」兩階段——第一階段只走目錄樹收集路徑（純元數據，便宜），
-    // 第二階段逐文件算哈希。枚舉只發生一次、總量免費得到，掃描進度才有 i/total 可報。
-    /// keepDir 收「相對於 root 的目錄路徑」，回 false 就整棵子樹不掃（連列舉都不會發生）。
-    /// root 自己不受 keepDir 管：它一定會被掃，不然底下什麼都沒有。
-    /// m 是緩存
-    let scan (rootPath: string) (cache: Map<string, Entry>) (keepDir: string -> bool) : Entry seq =
-        seq {
-            let relaPath = relativePath rootPath
-
-            // 階段A：收集目錄與文件路徑
-            let dirs = ResizeArray<string>()
-            let files = ResizeArray<string>()
-            let stack = Stack<string>()
-            stack.Push(rootPath)
-            while stack.Count > 0 do
-                let currentDir = stack.Pop()
-                try
-                    dirs.Add currentDir
-                    // 子目錄（在下降處就剪掉，被排除的目錄連列舉都不會發生）
-                    let subDirs =
-                        Directory.EnumerateDirectories(currentDir)
-                        |> Seq.filter (fun x -> keepDir (relaPath x))
-                        |> Seq.rev
-                    for d in subDirs do
-                        stack.Push(d)
-                    for f in Directory.EnumerateFiles(currentDir) do
-                        files.Add f
-                with
-                | :? UnauthorizedAccessException -> ()
-                | _ -> ()
-
-            for d in dirs do
-                yield Dir {
-                    PathEntry = relaPath d
-                }
-
-            // 階段B：逐文件算哈希（貴的部分），帶節流進度
-            let progress = Progress.over files.Count "scan"
-            for filePath in files do
-                try
-                    let fi = FileInfo(filePath)
-                    // key 要和 pathToMap 存的 Entry.path 一致：相對 root 的路徑
-                    let rel = relaPath fi.FullName
-                    progress rel
-                    let e = Map.tryFind rel cache
-                    let h =
-                        match e with
-                        | Some (File {
-                            Size = s
-                            MTimeUtc = t
-                            Hash = Some ha
-                            }) when (fi.Length, fi.LastWriteTimeUtc) = (s, t) ->
-                            Some ha
-                        | _ -> computeFileXxh128 filePath
-                    yield File {
-                        Path = rel
-                        Size = fi.Length
-                        MTimeUtc = fi.LastWriteTimeUtc
-                        Hash = h
-                    }
-                with
-                | _ -> ()
-        }
-
-    // 複製整棵目錄樹。骨架和 scan 一樣：棧 + 下鑽前過濾。
-    /// keepDir 收的是「相對於 src 的目錄路徑」，回 false 的目錄整棵子樹都不複製。
-    let copyTree (src: string) (dst: string) (keepDir: string -> bool) =
-        let relaPath = relativePath src
-        let stack = Stack<string>()
-        stack.Push src
-        while stack.Count > 0 do
-            let currentDir = stack.Pop()
-
-            // 一 pop 出來就建；「父先於子」由遍歷順序保證
-            Directory.CreateDirectory(Path.Combine(dst, relaPath currentDir)) |> ignore
-
-            let subDirs =
-                Directory.EnumerateDirectories(currentDir)
-                |> Seq.filter (fun x -> keepDir (relaPath x))
-                |> Seq.rev
-                |> List.ofSeq
-            for d in subDirs do stack.Push d
-
-            for f in Directory.EnumerateFiles(currentDir) do
-                let target = Path.Combine(dst, relaPath f)
-                File.Copy(f, target, true)
-                File.SetLastWriteTimeUtc(target, File.GetLastWriteTimeUtc f)   // File.Copy 不保留 mtime
-
-    let add path cache keepDir =
-        let s = scan path cache keepDir
-        let m =
-            s
-            |> Seq.map (fun x -> Entry.path x, x)
-            |> Map.ofSeq
-        m
-
-    let predAddFile k (l, r) =
-        match l, r with
-        | Some (File li), Some (File ri) when li <> ri ->
-            // 都是文件且已修改
-            true
-        | Some (Dir _), Some (File ri) ->
-            // 從目錄變成文件
-            true
-        | None, Some (File ri) ->
-            // 新增文件
-            true
-        | _ -> false
-
-    let predAddDir k (l, r) =
-        match l, r with
-        | None, Some (Dir _) -> true
-        | Some (File _), Some (Dir _) -> true
-        | _ -> false
-
-    let predRemoveDir k (l, r) =
-        match l, r with
-        | Some (Dir _), None -> true
-        | _ -> false
-
-    let predRemoveFile k (l, r) =
-        match l, r with
-        | Some (File _), None -> true
-        | _ -> false
-
-    /// 給 Map.compareGroup 的第二個返回值用：那裡的鍵是「兩邊都有」，
-    /// 值是一對裸 Entry（不是 option），有沒有改要在這裡判斷。
-    /// 只看文件：Dir 的 MTimeUtc 沒有可信來源（copyTree 只補回文件的 mtime），
-    /// 拿它比會讓整棵樹的目錄全部被判成「已修改」。
-    let predUpdateFile k (l: Entry, r: Entry) =
-        match l, r with
-        | File li, File ri -> li <> ri
-        | _ -> false
-
-    //let add path =
-    //    Map.empty
 
 type InitArgs =
     | [<Path>] Path of path: string
@@ -1454,7 +1199,7 @@ module Cmd =
         let r = Parse.Test.X.equal left right includePath excludePath
         logger.I $"result: {r}"
 
-    let yupdate (results: ParseResults<YUpdateArgs>) =
+    let update (results: ParseResults<YUpdateArgs>) =
         let path =
             results.GetResult(YUpdateArgs.Path, "")
         Parse.Test.updateDir path |> ignore
@@ -1488,7 +1233,7 @@ let main argv =
         | [Equal results] ->
             Cmd.equal results
         | [Update results] ->
-            Cmd.yupdate results
+            Cmd.update results
         | [ZAdd results] ->
             Parse.add results
         | [XAdd results] ->
