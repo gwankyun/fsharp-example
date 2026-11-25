@@ -5,7 +5,7 @@
     <TargetFramework>net11.0</TargetFramework>
   </PropertyGroup>
 
-  <ItemGroup><Compile Include="Common.fs" />
+  <ItemGroup><Compile Include="Attribute.fs" /><Compile Include="Args.fs" /><Compile Include="Common.fs" />
     <Compile Include="Record.fs" />
     <Compile Include="Config.fs" />
     <Compile Include="DirStatus.fs" />

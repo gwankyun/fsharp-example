@@ -10,21 +10,23 @@ open System.Text
 open FSharpPlus
 open Expecto
 open Record
+open AttributeCommon
+open Args
 
-type PathAttribute() =
-    inherit AltCommandLineAttribute([|"-p"|])
+// type PathAttribute() =
+//     inherit AltCommandLineAttribute([|"-p"|])
 
-type DestAttribute() =
-    inherit AltCommandLineAttribute([|"-d"; "--dest"|])
+// type DestAttribute() =
+//     inherit AltCommandLineAttribute([|"-d"; "--dest"|])
 
-type PrevAttribute() =
-    inherit AltCommandLineAttribute([|"--prev"|])
+// type PrevAttribute() =
+//     inherit AltCommandLineAttribute([|"--prev"|])
 
-type NameAttribute() =
-    inherit AltCommandLineAttribute([|"-n"|])
+// type NameAttribute() =
+//     inherit AltCommandLineAttribute([|"-n"|])
 
-type NoPrefixAttribute() =
-    inherit CliPrefixAttribute(CliPrefix.None)
+// type NoPrefixAttribute() =
+//     inherit CliPrefixAttribute(CliPrefix.None)
 
 module ArgText =
     let path = "指定目錄。"
@@ -44,77 +46,7 @@ type InitArgs =
             | Destination _ -> ArgText.dest
             | Name _ -> ArgText.name
 
-type YInitArgs =
-    | [<Name>] Name of path: string
-    | [<Path>] Path of path: string
-    | IncludePath of IncludePath: string list
-    | ExcludePath of ExcludePath: string list
 
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Name _ -> ArgText.path
-            | Path _ -> ArgText.path
-            | IncludePath _ -> ArgText.dest
-            | ExcludePath _ -> ArgText.dest
-
-type YAddArgs =
-    | [<Name>] Name of path: string
-    | Version of path: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Name _ -> ArgText.path
-            | Version _ -> ArgText.path
-
-type YDiffArgs =
-    | [<Name>] Name of path: string
-    | [<Dest>] Destination of path: string
-    | Left of Left: string
-    | Right of Right: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Name _ -> ArgText.path
-            | Destination _ -> ArgText.path
-            | Left _ -> ArgText.path
-            | Right _ -> ArgText.path
-
-type YEqualArgs =
-    | Left of Left: string
-    | Right of Right: string
-    | IncludePath of IncludePath: string list
-    | ExcludePath of ExcludePath: string list
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Left _ -> ArgText.path
-            | Right _ -> ArgText.path
-            | IncludePath _ -> ArgText.dest
-            | ExcludePath _ -> ArgText.dest
-
-type YUpdateArgs =
-    | Path of path: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> ArgText.path
-
-type YMergeArgs =
-    | Diff of path: string
-    | [<Dest>] Destination of path: string
-    | [<Name>] Name of path: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Diff _ -> ArgText.path
-            | Destination _ -> ArgText.path
-            | Name _ -> ArgText.name
 
 type AddArgs =
     | [<Path>] Path of path: string
@@ -277,12 +209,12 @@ type MainArgs =
     | [<NoPrefix>] TestUpdate of ParseResults<TestUpdateArgs>
     | [<NoPrefix>] ZEqual of ParseResults<EqualArgs>
     | [<NoPrefix>] ZInit of ParseResults<InitArgs>
-    | [<NoPrefix>] Init of ParseResults<YInitArgs>
-    | [<NoPrefix>] Add of ParseResults<YAddArgs>
-    | [<NoPrefix>] Diff of ParseResults<YDiffArgs>
-    | [<NoPrefix>] Merge of ParseResults<YMergeArgs>
-    | [<NoPrefix>] Equal of ParseResults<YEqualArgs>
-    | [<NoPrefix>] Update of ParseResults<YUpdateArgs>
+    | [<NoPrefix>] Init of ParseResults<Args.InitArgs>
+    | [<NoPrefix>] Add of ParseResults<Args.AddArgs>
+    | [<NoPrefix>] Diff of ParseResults<Args.DiffArgs>
+    | [<NoPrefix>] Merge of ParseResults<Args.MergeArgs>
+    | [<NoPrefix>] Equal of ParseResults<Args.EqualArgs>
+    | [<NoPrefix>] Update of ParseResults<Args.UpdateArgs>
     | Version
 
     interface IArgParserTemplate with
@@ -302,12 +234,12 @@ type MainArgs =
             | TestUpdate _ -> $"更新測試數據{ArgText.test}"
             | ZEqual _ -> $"比較測試結果{ArgText.test}"
             | ZInit _ -> "初始化配置。"
-            | Init _ -> "初始化配置"
-            | Add _ -> "添加狀態"
-            | Diff _ -> "對比兩個狀態"
-            | Merge _ -> "合併變更包"
-            | Equal _ -> "對比目錄"
-            | Update _ -> "更新目錄"
+            | Init _ -> Args.CmdText.init
+            | Add _ -> Args.CmdText.add
+            | Diff _ -> Args.CmdText.diff
+            | Merge _ -> Args.CmdText.merge
+            | Equal _ -> Args.CmdText.equal
+            | Update _ -> Args.CmdText.update
 
 module Parse =
     let add (results: ParseResults<AddArgs>) =
@@ -1143,42 +1075,42 @@ module Parse =
         | _ -> ()
 
 module Cmd =
-    let init (results: ParseResults<YInitArgs>) =
+    let init (results: ParseResults<Args.InitArgs>) =
         let name =
-            results.GetResult(YInitArgs.Name, "")
+            results.GetResult(Args.InitArgs.Name, "")
         let path =
-            results.GetResult(YInitArgs.Path, "")
+            results.GetResult(Args.InitArgs.Path, "")
         let includePath =
-            results.GetResult(YInitArgs.IncludePath, [])
+            results.GetResult(Args.InitArgs.IncludePath, [])
         let excludePath =
-            results.GetResult(YInitArgs.ExcludePath, [])
+            results.GetResult(Args.InitArgs.ExcludePath, [])
         Parse.Test.X.init name path includePath excludePath
 
-    let add (results: ParseResults<YAddArgs>) =
+    let add (results: ParseResults<Args.AddArgs>) =
         let name =
-            results.GetResult(YAddArgs.Name, "")
+            results.GetResult(Args.AddArgs.Name, "")
         let version =
-            results.GetResult(YAddArgs.Version, "")
+            results.GetResult(Args.AddArgs.Version, "")
         Parse.Test.X.add name version
 
-    let diff (results: ParseResults<YDiffArgs>) =
+    let diff (results: ParseResults<Args.DiffArgs>) =
         let name =
-            results.GetResult(YDiffArgs.Name, "")
+            results.GetResult(Args.DiffArgs.Name, "")
         let left =
-            results.GetResult(YDiffArgs.Left, "")
+            results.GetResult(Args.DiffArgs.Left, "")
         let right =
-            results.GetResult(YDiffArgs.Right, "")
+            results.GetResult(Args.DiffArgs.Right, "")
         let dest =
-            results.GetResult(YDiffArgs.Destination, "")
+            results.GetResult(Args.DiffArgs.Destination, "")
         Parse.Test.X.diff name left right dest
 
-    let merge (results: ParseResults<YMergeArgs>) =
+    let merge (results: ParseResults<Args.MergeArgs>) =
         let diff =
-            results.GetResult(YMergeArgs.Diff, "")
+            results.GetResult(Args.MergeArgs.Diff, "")
         let dest =
-            results.GetResult(YMergeArgs.Destination, "")
+            results.GetResult(Args.MergeArgs.Destination, "")
         let name =
-            results.GetResult(YMergeArgs.Name, "")
+            results.GetResult(Args.MergeArgs.Name, "")
         // 優先用name
         let dest =
             if name <> "" then
@@ -1187,21 +1119,21 @@ module Cmd =
                 dest
         Parse.Test.X.merge diff dest
 
-    let equal (results: ParseResults<YEqualArgs>) =
+    let equal (results: ParseResults<Args.EqualArgs>) =
         let left =
-            results.GetResult(YEqualArgs.Left, "")
+            results.GetResult(Args.EqualArgs.Left, "")
         let right =
-            results.GetResult(YEqualArgs.Right, "")
+            results.GetResult(Args.EqualArgs.Right, "")
         let includePath =
-            results.GetResult(YEqualArgs.IncludePath, [])
+            results.GetResult(Args.EqualArgs.IncludePath, [])
         let excludePath =
-            results.GetResult(YEqualArgs.ExcludePath, [])
+            results.GetResult(Args.EqualArgs.ExcludePath, [])
         let r = Parse.Test.X.equal left right includePath excludePath
         logger.I $"result: {r}"
 
-    let update (results: ParseResults<YUpdateArgs>) =
+    let update (results: ParseResults<Args.UpdateArgs>) =
         let path =
-            results.GetResult(YUpdateArgs.Path, "")
+            results.GetResult(Args.UpdateArgs.Path, "")
         Parse.Test.updateDir path |> ignore
 
 [<EntryPoint>]
