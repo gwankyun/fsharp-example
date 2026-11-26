@@ -2,8 +2,6 @@
 open Common
 open System
 open System.IO
-open System.Collections.Generic
-open System.IO.Hashing
 open System.Diagnostics
 open System.Text.Json
 open System.Text
@@ -12,203 +10,23 @@ open Expecto
 open Record
 open AttributeCommon
 open Args
-
-// type PathAttribute() =
-//     inherit AltCommandLineAttribute([|"-p"|])
-
-// type DestAttribute() =
-//     inherit AltCommandLineAttribute([|"-d"; "--dest"|])
-
-// type PrevAttribute() =
-//     inherit AltCommandLineAttribute([|"--prev"|])
-
-// type NameAttribute() =
-//     inherit AltCommandLineAttribute([|"-n"|])
-
-// type NoPrefixAttribute() =
-//     inherit CliPrefixAttribute(CliPrefix.None)
-
-module ArgText =
-    let path = "指定目錄。"
-    let name = "指定配置名稱。"
-    let dest = "輸出路徑"
-    let test = "，僅內部使用"
-
-type InitArgs =
-    | [<Path>] Path of path: string
-    | [<Dest>] Destination of destination: string
-    | [<Name>] Name of name: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> ArgText.path
-            | Destination _ -> ArgText.dest
-            | Name _ -> ArgText.name
-
-
-
-type AddArgs =
-    | [<Path>] Path of path: string
-    | [<Dest>] Destination of destination: string
-    | [<Name>] Name of name: string
-    | Include of includeDir: string list
-    | Exclude of exclude: string list
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> ArgText.path
-            | Destination _ -> ArgText.dest
-            | Include _ -> "包含目錄。"
-            | Exclude _ -> "排除目錄。"
-            | Name _ -> ArgText.name
-
-type XAddArgs =
-    | [<Path>] Path of path: string
-    | [<Dest>] Destination of path: string
-    | [<Prev>] Previous of path: string
-    | Exclude of excludeDir: string list
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> "操作目錄"
-            | Destination _ -> "輸出文件"
-            | Previous _ -> "以前"
-            | Exclude _ -> "排除目錄。"
-
-type XCompareArgs =
-    | [<Path>] Path of path: string
-    | [<Dest>] Destination of path: string
-    | Left of left: string
-    | Right of right: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> "操作目錄"
-            | Destination _ -> "輸出文件"
-            | Left _ -> "左"
-            | Right _ -> "右"
-
-type XMergeArgs =
-    | [<Path>] Path of path: string
-    | [<Dest>] Destination of path: string
-    | [<Prev>] Previous of path: string
-    | Exclude of excludeDir: string list
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> "操作目錄"
-            | Destination _ -> "輸出文件"
-            | Previous _ -> "以前"
-            | Exclude _ -> "排除目錄。"
-
-type XTestArgs =
-    | [<Path>] Path of path: string
-    //| [<Dest>] Destination of destination: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> "操作目錄"
-            //| Destination _ -> ArgText.dest
-
-type CompareArgs =
-    | Left of left: string
-    | Right of right: string
-    | [<Name>] Name of name: string
-    | [<Dest>] Destination of destination: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Left _ -> "左"
-            | Right _ -> "右"
-            | Destination _ -> ArgText.dest
-            | Name _ -> ArgText.name
-
-type ExportArgs =
-    | [<Path>] Path of path: string
-    | [<AltCommandLine("--diff")>] Difference of difference: string
-    | [<Dest>] Destination of destination: string
-    | [<Name>] Name of name: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> ArgText.path
-            | Difference _ -> "差異文件。"
-            | Destination _ -> ArgText.dest
-            | Name _ -> ArgText.name
-
-type MergeArgs =
-    | [<Path>] Path of path: string
-    | [<Dest>] Destination of destination: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> ArgText.path
-            | Destination _ -> ArgText.dest
-
-type TestArgs =
-    | [<Path>] Path of path: string
-    | [<Dest>] Destination of destination: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> ArgText.path
-            | Destination _ -> ArgText.dest
-
-type TestPrepareArgs =
-    | [<Path>] Path of path: string
-    | [<Dest>] Destination of destination: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> ArgText.path
-            | Destination _ -> ArgText.dest
-
-type TestUpdateArgs =
-    | [<Path>] Path of path: string
-    | [<Dest>] Destination of destination: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Path _ -> ArgText.path
-            | Destination _ -> ArgText.dest
-
-type EqualArgs =
-    | Left of left: string
-    | Right of right: string
-
-    interface IArgParserTemplate with
-        member this.Usage =
-            match this with
-            | Left _ -> "左。"
-            | Right _ -> "右。"
+open Legacy
 
 // 主命令类型
 type MainArgs =
-    | [<NoPrefix>] ZAdd of ParseResults<AddArgs>
-    | [<NoPrefix>] XAdd of ParseResults<XAddArgs>
-    | [<NoPrefix>] Compare of ParseResults<CompareArgs>
-    | [<NoPrefix>] XCompare of ParseResults<XCompareArgs>
-    | [<NoPrefix>] Export of ParseResults<ExportArgs>
-    | [<NoPrefix>] ZMerge of ParseResults<MergeArgs>
-    | [<NoPrefix>] XMerge of ParseResults<XMergeArgs>
-    | [<NoPrefix>] Test of ParseResults<TestArgs>
-    | [<NoPrefix>] XTest of ParseResults<XTestArgs>
-    | [<NoPrefix>] TestPrepare of ParseResults<TestPrepareArgs>
-    | [<NoPrefix>] TestUpdate of ParseResults<TestUpdateArgs>
-    | [<NoPrefix>] ZEqual of ParseResults<EqualArgs>
-    | [<NoPrefix>] ZInit of ParseResults<InitArgs>
+    | [<NoPrefix>] ZAdd of ParseResults<Legacy.AddArgs>
+    | [<NoPrefix>] XAdd of ParseResults<Legacy.XAddArgs>
+    | [<NoPrefix>] Compare of ParseResults<Legacy.CompareArgs>
+    | [<NoPrefix>] XCompare of ParseResults<Legacy.XCompareArgs>
+    | [<NoPrefix>] Export of ParseResults<Legacy.ExportArgs>
+    | [<NoPrefix>] ZMerge of ParseResults<Legacy.MergeArgs>
+    | [<NoPrefix>] XMerge of ParseResults<Legacy.XMergeArgs>
+    | [<NoPrefix>] Test of ParseResults<Legacy.TestArgs>
+    | [<NoPrefix>] XTest of ParseResults<Legacy.XTestArgs>
+    | [<NoPrefix>] TestPrepare of ParseResults<Legacy.TestPrepareArgs>
+    | [<NoPrefix>] TestUpdate of ParseResults<Legacy.TestUpdateArgs>
+    | [<NoPrefix>] ZEqual of ParseResults<Legacy.EqualArgs>
+    | [<NoPrefix>] ZInit of ParseResults<Legacy.InitArgs>
     | [<NoPrefix>] Init of ParseResults<Args.InitArgs>
     | [<NoPrefix>] Add of ParseResults<Args.AddArgs>
     | [<NoPrefix>] Diff of ParseResults<Args.DiffArgs>
@@ -228,11 +46,11 @@ type MainArgs =
             | ZMerge _ -> "合併變更包。"
             | XMerge _ -> "合併變更包。"
             | Version -> "顯示版本信息。"
-            | Test _ -> $"測試{ArgText.test}"
-            | XTest _ -> $"測試{ArgText.test}"
-            | TestPrepare _ -> $"生成測試數據{ArgText.test}"
-            | TestUpdate _ -> $"更新測試數據{ArgText.test}"
-            | ZEqual _ -> $"比較測試結果{ArgText.test}"
+            | Test _ -> $"測試{Legacy.ArgText.test}"
+            | XTest _ -> $"測試{Legacy.ArgText.test}"
+            | TestPrepare _ -> $"生成測試數據{Legacy.ArgText.test}"
+            | TestUpdate _ -> $"更新測試數據{Legacy.ArgText.test}"
+            | ZEqual _ -> $"比較測試結果{Legacy.ArgText.test}"
             | ZInit _ -> "初始化配置。"
             | Init _ -> Args.CmdText.init
             | Add _ -> Args.CmdText.add
@@ -242,15 +60,15 @@ type MainArgs =
             | Update _ -> Args.CmdText.update
 
 module Parse =
-    let add (results: ParseResults<AddArgs>) =
-        let name = results.TryGetResult(AddArgs.Name)
-        let path = results.TryGetResult(AddArgs.Path)
-        let dest = results.TryGetResult(AddArgs.Destination)
+    let add (results: ParseResults<Legacy.AddArgs>) =
+        let name = results.TryGetResult(Legacy.AddArgs.Name)
+        let path = results.TryGetResult(Legacy.AddArgs.Path)
+        let dest = results.TryGetResult(Legacy.AddArgs.Destination)
         let includeDir =
-            results.TryGetResult(AddArgs.Include)
+            results.TryGetResult(Legacy.AddArgs.Include)
             |> Option.defaultValue []
         let exclude =
-            results.TryGetResult(AddArgs.Exclude)
+            results.TryGetResult(Legacy.AddArgs.Exclude)
             |> Option.defaultValue []
         match name, path, dest with
         | Some n, _, Some d ->
@@ -265,15 +83,15 @@ module Parse =
             DirStatus.add p d includeDir exclude
         | _ -> failwith "參數錯誤"
 
-    let xadd (results: ParseResults<XAddArgs>) =
-        let path = results.TryGetResult(XAddArgs.Path)
-        let dest = results.TryGetResult(XAddArgs.Destination)
-        let prev = results.TryGetResult(XAddArgs.Previous)
+    let xadd (results: ParseResults<Legacy.XAddArgs>) =
+        let path = results.TryGetResult(Legacy.XAddArgs.Path)
+        let dest = results.TryGetResult(Legacy.XAddArgs.Destination)
+        let prev = results.TryGetResult(Legacy.XAddArgs.Previous)
         // GetResults 是「同一旗標的每次出現都收回來」：--exclude a b 和 --exclude a --exclude b 都吃。
         // 用 TryGetResult 的話是「最後一次蓋掉前面」，--exclude a --exclude b 只會拿到 b，a 被靜默丟掉
         // （而且值根本沒進到這裡，連未命中警告都看不到）。
         // 沒共用成 helper 是因為參數型別是 Expr<'U -> 'T>，靠 F# 自動引號化，只有語法上的建構子吃得到。
-        let exc = results.GetResults(XAddArgs.Exclude) |> List.concat
+        let exc = results.GetResults(Legacy.XAddArgs.Exclude) |> List.concat
         logger.I $"excludeDir: {exc}"
         // 早點驗證 --exclude 的形狀：寫錯就立刻報錯，不要等掃完才發現
         let keepDir, report = Record.excludeToKeepDir exc
@@ -316,11 +134,11 @@ module Parse =
         Directory.createDirectoryFor statusFile
         File.Copy(ri, statusFile, true)
 
-    let xcompare (results: ParseResults<XCompareArgs>) =
-        let left = results.TryGetResult(XCompareArgs.Left)
-        let right = results.TryGetResult(XCompareArgs.Right)
-        let path = results.TryGetResult(XCompareArgs.Path)
-        let dest = results.TryGetResult(XCompareArgs.Destination)
+    let xcompare (results: ParseResults<Legacy.XCompareArgs>) =
+        let left = results.TryGetResult(Legacy.XCompareArgs.Left)
+        let right = results.TryGetResult(Legacy.XCompareArgs.Right)
+        let path = results.TryGetResult(Legacy.XCompareArgs.Path)
+        let dest = results.TryGetResult(Legacy.XCompareArgs.Destination)
 
         let toSet = Map.keys >> Set.ofSeq
         let createDirFor (dest: string) =
@@ -397,15 +215,15 @@ module Parse =
         let removeItem x = - depth x, x
 
     /// path 合併到 dest
-    let xmerge (results: ParseResults<XMergeArgs>) =
+    let xmerge (results: ParseResults<Legacy.XMergeArgs>) =
         /// 補丁包目錄
-        let path = results.TryGetResult(XMergeArgs.Path)
+        let path = results.TryGetResult(Legacy.XMergeArgs.Path)
         /// 應用補丁包的目錄
-        let dest = results.TryGetResult(XMergeArgs.Destination)
+        let dest = results.TryGetResult(Legacy.XMergeArgs.Destination)
         /// 緩存
-        let prev = results.TryGetResult(XMergeArgs.Previous)
+        let prev = results.TryGetResult(Legacy.XMergeArgs.Previous)
         let excludeDir =
-            results.TryGetResult(XMergeArgs.Exclude)
+            results.TryGetResult(Legacy.XMergeArgs.Exclude)
             |> Option.defaultValue []
         let keepDir, report = Record.excludeToKeepDir excludeDir
         let prevMap =
@@ -895,8 +713,8 @@ module Parse =
                         not <| Record.Entry.equal a b)
                 a |> Map.isEmpty && d |> Map.isEmpty && not uCheck
 
-    let xtest (results: ParseResults<XTestArgs>) =
-        let path = results.TryGetResult(XTestArgs.Path)
+    let xtest (results: ParseResults<Legacy.XTestArgs>) =
+        let path = results.TryGetResult(Legacy.XTestArgs.Path)
         logger.I $"path: {path}"
         let mapTests =
             test "map test" {
@@ -1026,11 +844,11 @@ module Parse =
         runTestsWithCLIArgs [] Array.empty mapTests
         |> ignore
 
-    let compare (results: ParseResults<CompareArgs>) =
-        let name = results.TryGetResult(CompareArgs.Name)
-        let left = results.TryGetResult(CompareArgs.Left)
-        let right = results.TryGetResult(CompareArgs.Right)
-        let dest = results.TryGetResult(CompareArgs.Destination)
+    let compare (results: ParseResults<Legacy.CompareArgs>) =
+        let name = results.TryGetResult(Legacy.CompareArgs.Name)
+        let left = results.TryGetResult(Legacy.CompareArgs.Left)
+        let right = results.TryGetResult(Legacy.CompareArgs.Right)
+        let dest = results.TryGetResult(Legacy.CompareArgs.Destination)
         match name, left, right, dest with
         | Some n, Some le, Some ri, Some d ->
             let config = Config.tryGet n
@@ -1046,11 +864,11 @@ module Parse =
             DirStatus.compare le ri d
         | _ -> ()
 
-    let export (results: ParseResults<ExportArgs>) =
-        let name = results.TryGetResult(ExportArgs.Name)
-        let path = results.TryGetResult(ExportArgs.Path)
-        let dest = results.TryGetResult(ExportArgs.Destination)
-        let diff = results.GetResult(ExportArgs.Difference)
+    let export (results: ParseResults<Legacy.ExportArgs>) =
+        let name = results.TryGetResult(Legacy.ExportArgs.Name)
+        let path = results.TryGetResult(Legacy.ExportArgs.Path)
+        let dest = results.TryGetResult(Legacy.ExportArgs.Destination)
+        let diff = results.GetResult(Legacy.ExportArgs.Difference)
         match name, path, dest with
         | Some n, _, Some d ->
             let config = Config.tryGet n
@@ -1147,12 +965,12 @@ let main argv =
         match results.GetAllResults() with
         | [ZInit results] ->
             let path =
-                results.TryGetResult(InitArgs.Path)
+                results.TryGetResult(Legacy.InitArgs.Path)
                 |> Option.defaultValue ""
             let dest =
-                results.TryGetResult(InitArgs.Destination)
+                results.TryGetResult(Legacy.InitArgs.Destination)
                 |> Option.defaultValue ""
-            let name = results.TryGetResult(InitArgs.Name)
+            let name = results.TryGetResult(Legacy.InitArgs.Name)
             DirStatus.init path dest name
         | [Init results] ->
             Cmd.init results
@@ -1179,28 +997,28 @@ let main argv =
         | [Export results] ->
             Parse.export results
         | [ZMerge results] ->
-            let path = results.GetResult(MergeArgs.Path)
-            let dest = results.GetResult(MergeArgs.Destination)
+            let path = results.GetResult(Legacy.MergeArgs.Path)
+            let dest = results.GetResult(Legacy.MergeArgs.Destination)
             DirStatus.merge path dest
         | [Test results] ->
-            let path = results.GetResult(TestArgs.Path)
-            let dest = results.GetResult(TestArgs.Destination)
+            let path = results.GetResult(Legacy.TestArgs.Path)
+            let dest = results.GetResult(Legacy.TestArgs.Destination)
             DirStatus.test path dest
         | [XTest results] ->
             //let path = results.GetResult(XTestArgs.Path)
             Parse.xtest results
             ()
         | [ZEqual results] ->
-            let path = results.GetResult(EqualArgs.Left)
-            let dest = results.GetResult(EqualArgs.Right)
+            let path = results.GetResult(Legacy.EqualArgs.Left)
+            let dest = results.GetResult(Legacy.EqualArgs.Right)
             DirStatus.equal path dest
         | [TestPrepare results] ->
-            let path = results.GetResult(TestPrepareArgs.Path)
-            let dest = results.GetResult(TestPrepareArgs.Destination)
+            let path = results.GetResult(Legacy.TestPrepareArgs.Path)
+            let dest = results.GetResult(Legacy.TestPrepareArgs.Destination)
             DirStatus.testPrepare path dest
         | [TestUpdate results] ->
-            let path = results.GetResult(TestUpdateArgs.Path)
-            let dest = results.GetResult(TestUpdateArgs.Destination)
+            let path = results.GetResult(Legacy.TestUpdateArgs.Path)
+            let dest = results.GetResult(Legacy.TestUpdateArgs.Destination)
             DirStatus.testUpdate path dest
         | [Version] ->
             printfn "版本 1.0.0"
